@@ -3,17 +3,33 @@ package com.yourname.classroomagent
 import androidx.core.net.toUri
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
 import android.view.accessibility.AccessibilityManager
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
     private var activeDialog: AlertDialog? = null
+
+    private val editApprovedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            showSetupDialog(isResetup = true)
+        }
+    }
+
+    private val editRejectedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Toast.makeText(this@MainActivity, "선생님이 학적 수정 요청을 거절했습니다.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,15 +50,34 @@ class MainActivity : AppCompatActivity() {
             ClassWatcherService.isClassInSession = false
             Toast.makeText(this, "수업 모드 종료", Toast.LENGTH_SHORT).show()
         }
+
+        findViewById<Button>(R.id.btnEditRequest).setOnClickListener {
+            AgentWebSocketServer.editRequested = true
+            Toast.makeText(this, "학적 수정 요청을 전송했습니다", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        ContextCompat.registerReceiver(
+            this,
+            editApprovedReceiver,
+            IntentFilter("com.yourname.classroomagent.EDIT_APPROVED"),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this,
+            editRejectedReceiver,
+            IntentFilter("com.yourname.classroomagent.EDIT_REJECTED"),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         checkPermissions()
     }
 
     override fun onPause() {
         super.onPause()
+        unregisterReceiver(editApprovedReceiver)
+        unregisterReceiver(editRejectedReceiver)
         activeDialog?.dismiss()
         activeDialog = null
     }
@@ -94,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSetupDialog() {
+    private fun showSetupDialog(isResetup: Boolean = false) {
         val gradeSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(
                 this@MainActivity,
@@ -124,6 +159,21 @@ class MainActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT
         }
 
+        // 재설정 시 기존 값 미리 채우기
+        if (isResetup) {
+            val existing = getSharedPreferences("setup", MODE_PRIVATE)
+                .getString("deviceName", "") ?: ""
+            if (existing.length >= 5) {
+                val grade = (existing[0] - '0').coerceIn(1, 3)
+                val classNum = existing.substring(1, 3).toIntOrNull()?.coerceIn(1, 20) ?: 1
+                val number = existing.substring(3, 5).toIntOrNull()?.coerceIn(1, 40) ?: 1
+                gradeSpinner.setSelection(grade - 1)
+                classSpinner.setSelection(classNum - 1)
+                numberSpinner.setSelection(number - 1)
+                nameEditText.setText(existing.substring(5))
+            }
+        }
+
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(64, 24, 64, 8)
@@ -138,7 +188,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         activeDialog = AlertDialog.Builder(this)
-            .setTitle("기기 설정")
+            .setTitle(if (isResetup) "학적 정보 수정" else "기기 설정")
             .setView(layout)
             .setCancelable(false)
             .setPositiveButton("확인", null)
@@ -163,8 +213,14 @@ class MainActivity : AppCompatActivity() {
             activeDialog?.dismiss()
             activeDialog = null
 
-            startForegroundService(Intent(this, OverlayService::class.java))
-            checkPermissions()
+            if (isResetup) {
+                startService(Intent(this, OverlayService::class.java).apply {
+                    action = "RE_REGISTER_MDNS"
+                })
+            } else {
+                startForegroundService(Intent(this, OverlayService::class.java))
+                checkPermissions()
+            }
         }
     }
 

@@ -21,4 +21,12 @@
         android:text="🔓 수업 종료"
         android:textSize="20sp"/>
 
+    <Button
+        android:id="@+id/btnEditRequest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="✏️ 학적 수정 요청"
+        android:textSize="16sp"
+        android:layout_marginTop="32dp"/>
+
 </LinearLayout>

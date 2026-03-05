@@ -15,6 +15,10 @@ class AgentWebSocketServer(
     private val onCommand: (String, org.java_websocket.WebSocket) -> Unit
 ) : WebSocketServer(InetSocketAddress("0.0.0.0", port)) {
 
+    companion object {
+        var editRequested = false
+    }
+
     override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
         android.util.Log.d("WebSocket", "선생님 연결됨: ${conn.remoteSocketAddress}")
     }
@@ -33,8 +37,12 @@ class AgentWebSocketServer(
             val sessionStatus = if (ClassWatcherService.isClassInSession) "IN_SESSION" else "IDLE"
             val accessibilityEnabled = isAccessibilityEnabled()
             val overlayEnabled = Settings.canDrawOverlays(context)
-            conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled")
+            conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|EDIT_REQUEST:$editRequested")
             return
+        }
+
+        if (command == "EDIT_APPROVED" || command == "EDIT_REJECTED") {
+            editRequested = false
         }
 
         onCommand(command, conn)

@@ -15,6 +15,9 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var overlayView: TextView? = null
     private var webSocketServer: AgentWebSocketServer? = null
+    private var nsdManager: android.net.nsd.NsdManager? = null
+    private var nsdListener: android.net.nsd.NsdManager.RegistrationListener? = null
+    private var pendingReregister = false
 
     override fun onCreate() {
         super.onCreate()
@@ -33,6 +36,12 @@ class OverlayService : Service() {
                 "STOP" -> {
                     ClassWatcherService.isClassInSession = false
                 }
+                "EDIT_APPROVED" -> {
+                    sendBroadcast(Intent("com.yourname.classroomagent.EDIT_APPROVED"))
+                }
+                "EDIT_REJECTED" -> {
+                    sendBroadcast(Intent("com.yourname.classroomagent.EDIT_REJECTED"))
+                }
             }
         }
         webSocketServer?.start()
@@ -45,33 +54,62 @@ class OverlayService : Service() {
 
         android.util.Log.d("mDNS", "기기 이름: $deviceName")
 
+        if (nsdManager == null) {
+            nsdManager = getSystemService(NSD_SERVICE) as android.net.nsd.NsdManager
+        }
+
         val serviceInfo = android.net.nsd.NsdServiceInfo().apply {
             serviceName = deviceName
             serviceType = "_classroomagent._tcp."
             port = 8080
         }
 
-        val nsdManager = getSystemService(NSD_SERVICE) as android.net.nsd.NsdManager
-        nsdManager.registerService(
-            serviceInfo,
-            android.net.nsd.NsdManager.PROTOCOL_DNS_SD,
-            object : android.net.nsd.NsdManager.RegistrationListener {
-                override fun onServiceRegistered(info: android.net.nsd.NsdServiceInfo) {
-                    android.util.Log.d("mDNS", "등록 완료: ${info.serviceName}")
-                }
-                override fun onRegistrationFailed(info: android.net.nsd.NsdServiceInfo, code: Int) {
-                    android.util.Log.e("mDNS", "등록 실패: $code")
-                }
-                override fun onServiceUnregistered(info: android.net.nsd.NsdServiceInfo) {}
-                override fun onUnregistrationFailed(info: android.net.nsd.NsdServiceInfo, code: Int) {}
+        nsdListener = object : android.net.nsd.NsdManager.RegistrationListener {
+            override fun onServiceRegistered(info: android.net.nsd.NsdServiceInfo) {
+                android.util.Log.d("mDNS", "등록 완료: ${info.serviceName}")
             }
-        )
+            override fun onRegistrationFailed(info: android.net.nsd.NsdServiceInfo, code: Int) {
+                android.util.Log.e("mDNS", "등록 실패: $code")
+            }
+            override fun onServiceUnregistered(info: android.net.nsd.NsdServiceInfo) {
+                android.util.Log.d("mDNS", "등록 해제됨")
+                if (pendingReregister) {
+                    pendingReregister = false
+                    registerMdns()
+                }
+            }
+            override fun onUnregistrationFailed(info: android.net.nsd.NsdServiceInfo, code: Int) {
+                android.util.Log.e("mDNS", "등록 해제 실패: $code")
+                pendingReregister = false
+                registerMdns()
+            }
+        }
+
+        nsdManager?.registerService(serviceInfo, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, nsdListener!!)
+    }
+
+    private fun reregisterMdns() {
+        val mgr = nsdManager
+        val listener = nsdListener
+        if (mgr != null && listener != null) {
+            pendingReregister = true
+            try {
+                mgr.unregisterService(listener)
+            } catch (e: Exception) {
+                android.util.Log.e("mDNS", "등록 해제 예외: ${e.message}")
+                pendingReregister = false
+                registerMdns()
+            }
+        } else {
+            registerMdns()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "SHOW" -> showOverlay()
             "HIDE" -> hideOverlay()
+            "RE_REGISTER_MDNS" -> reregisterMdns()
         }
         return START_STICKY
     }
