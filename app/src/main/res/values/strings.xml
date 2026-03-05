@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ClassroomAgent</string>
+    <string name="accessibility_service_description">수업 중 앱 전환을 감지합니다</string>
+</resources>
