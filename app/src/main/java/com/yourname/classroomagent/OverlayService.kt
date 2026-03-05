@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.IBinder
-import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
@@ -40,9 +39,8 @@ class OverlayService : Service() {
     }
 
     private fun registerMdns() {
-        // 사용자가 설정한 기기 이름, 없으면 모델명으로 폴백
-        val deviceName = Settings.Global.getString(contentResolver, "device_name")
-            ?.takeIf { it.isNotBlank() }
+        val deviceName = getSharedPreferences("setup", MODE_PRIVATE)
+            .getString("deviceName", null)
             ?: android.os.Build.MODEL
 
         android.util.Log.d("mDNS", "기기 이름: $deviceName")

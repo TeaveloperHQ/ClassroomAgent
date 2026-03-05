@@ -24,16 +24,21 @@ class AgentWebSocketServer(
     }
 
     override fun onMessage(conn: WebSocket, message: String) {
-        android.util.Log.d("WebSocket", "명령 수신: $message")
-        if (message.trim() == "STATUS") {
+        val trimmed = message.trim()
+        android.util.Log.d("WebSocket", "명령 수신: $trimmed")
+
+        val command = trimmed
+
+        if (command == "STATUS") {
             val sessionStatus = if (ClassWatcherService.isClassInSession) "IN_SESSION" else "IDLE"
             val accessibilityEnabled = isAccessibilityEnabled()
             val overlayEnabled = Settings.canDrawOverlays(context)
             conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled")
-        } else {
-            onCommand(message, conn)
-            conn.send("OK: $message")
+            return
         }
+
+        onCommand(command, conn)
+        conn.send("OK: $command")
     }
 
     override fun onError(conn: WebSocket?, ex: Exception) {

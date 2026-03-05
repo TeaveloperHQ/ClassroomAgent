@@ -6,9 +6,9 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.view.accessibility.AccessibilityManager
-import android.widget.Button
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
@@ -19,7 +19,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        startForegroundService(Intent(this, OverlayService::class.java))
+        // 설정이 완료된 경우에만 서비스 시작
+        val prefs = getSharedPreferences("setup", MODE_PRIVATE)
+        if (prefs.getString("deviceName", null) != null) {
+            startForegroundService(Intent(this, OverlayService::class.java))
+        }
 
         findViewById<Button>(R.id.btnStart).setOnClickListener {
             ClassWatcherService.isClassInSession = true
@@ -45,6 +49,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissions() {
         if (activeDialog?.isShowing == true) return
+
+        // 초기 설정이 완료되지 않은 경우 설정 다이얼로그 먼저 표시
+        val prefs = getSharedPreferences("setup", MODE_PRIVATE)
+        if (prefs.getString("deviceName", null) == null) {
+            showSetupDialog()
+            return
+        }
 
         if (!Settings.canDrawOverlays(this)) {
             showPermissionDialog(
@@ -80,6 +91,80 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             )
+        }
+    }
+
+    private fun showSetupDialog() {
+        val gradeSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                listOf("1학년", "2학년", "3학년")
+            )
+        }
+
+        val classSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                (1..20).map { "%02d반".format(it) }
+            )
+        }
+
+        val numberSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                (1..40).map { "%02d번".format(it) }
+            )
+        }
+
+        val nameEditText = EditText(this).apply {
+            hint = "이름 입력"
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(64, 24, 64, 8)
+            addView(TextView(this@MainActivity).apply { text = "학년" })
+            addView(gradeSpinner)
+            addView(TextView(this@MainActivity).apply { text = "반" })
+            addView(classSpinner)
+            addView(TextView(this@MainActivity).apply { text = "번호" })
+            addView(numberSpinner)
+            addView(TextView(this@MainActivity).apply { text = "이름" })
+            addView(nameEditText)
+        }
+
+        activeDialog = AlertDialog.Builder(this)
+            .setTitle("기기 설정")
+            .setView(layout)
+            .setCancelable(false)
+            .setPositiveButton("확인", null)
+            .show()
+
+        activeDialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+            val name = nameEditText.text.toString().trim()
+            if (name.isEmpty()) {
+                Toast.makeText(this, "이름을 입력해주세요", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val grade = gradeSpinner.selectedItemPosition + 1
+            val classNum = "%02d".format(classSpinner.selectedItemPosition + 1)
+            val number = "%02d".format(numberSpinner.selectedItemPosition + 1)
+            val deviceName = "$grade$classNum$number$name"
+
+            getSharedPreferences("setup", MODE_PRIVATE).edit()
+                .putString("deviceName", deviceName)
+                .apply()
+
+            activeDialog?.dismiss()
+            activeDialog = null
+
+            startForegroundService(Intent(this, OverlayService::class.java))
+            checkPermissions()
         }
     }
 
