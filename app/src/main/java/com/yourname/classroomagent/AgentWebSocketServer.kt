@@ -2,6 +2,8 @@ package com.yourname.classroomagent
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import org.java_websocket.WebSocket
@@ -38,6 +40,40 @@ class AgentWebSocketServer(
             val accessibilityEnabled = isAccessibilityEnabled()
             val overlayEnabled = Settings.canDrawOverlays(context)
             conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|EDIT_REQUEST:$editRequested")
+            return
+        }
+
+        if (command == "GET_APPS") {
+            try {
+                val allApps = context.packageManager.getInstalledApplications(0)
+                val teamsApp = allApps.find { it.packageName.contains("teams", ignoreCase = true)
+                    || it.packageName.contains("microsoft", ignoreCase = true) }
+                android.util.Log.d("GET_APPS", "Teams 검색 결과: ${teamsApp?.packageName ?: "없음"}")
+
+                val teamsLaunch = teamsApp?.let {
+                    context.packageManager.getLaunchIntentForPackage(it.packageName)
+                }
+                android.util.Log.d("GET_APPS", "Teams launch intent: $teamsLaunch")
+
+                val pm = context.packageManager
+                val method1 = pm.getInstalledApplications(0)
+                    .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
+                    .map { "${pm.getApplicationLabel(it)}:${it.packageName}" }
+
+                val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                val method2 = pm.queryIntentActivities(launcherIntent, 0)
+                    .map { "${it.loadLabel(pm)}:${it.activityInfo.packageName}" }
+
+                val result = (method1 + method2)
+                    .distinctBy { it.substringAfter(":") }
+                    .sortedBy { it.substringBefore(":") }
+                android.util.Log.d("GET_APPS", "Method1: ${method1.size}, Method2: ${method2.size}, 합계: ${result.size}")
+                val response = "APP_LIST|" + result.joinToString("|")
+                conn.send(response)
+            } catch (e: Exception) {
+                android.util.Log.e("GET_APPS", "오류 발생: ${e.message}", e)
+                conn.send("APP_LIST|")
+            }
             return
         }
 

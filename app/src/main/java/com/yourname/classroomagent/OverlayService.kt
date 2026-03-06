@@ -22,25 +22,51 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         startForeground(1, createNotification())
+        loadAllowedApps()
         startWebSocketServer()
         registerMdns()
+    }
+
+    private fun loadAllowedApps() {
+        val prefs = getSharedPreferences("setup", MODE_PRIVATE)
+        val savedApps = prefs.getString("allowed_apps", null)
+        if (savedApps == null) {
+            prefs.edit()
+                .putString("allowed_apps", ClassWatcherService.DEFAULT_ALLOWED_PACKAGES.joinToString(","))
+                .apply()
+            ClassWatcherService.allowedPackages = ClassWatcherService.DEFAULT_ALLOWED_PACKAGES.toMutableSet()
+        } else {
+            val packages = savedApps.split(",").filter { it.isNotBlank() }.toMutableSet()
+            packages.addAll(ClassWatcherService.DEFAULT_ALLOWED_PACKAGES)
+            ClassWatcherService.allowedPackages = packages
+        }
     }
 
     private fun startWebSocketServer() {
         webSocketServer = AgentWebSocketServer(8080, this) { command, conn ->
             android.util.Log.d("WebSocket", "명령 처리: $command")
-            when (command.trim()) {
-                "START" -> {
+            val trimmedCommand = command.trim()
+            when {
+                trimmedCommand == "START" -> {
                     ClassWatcherService.isClassInSession = true
                 }
-                "STOP" -> {
+                trimmedCommand == "STOP" -> {
                     ClassWatcherService.isClassInSession = false
                 }
-                "EDIT_APPROVED" -> {
+                trimmedCommand == "EDIT_APPROVED" -> {
                     sendBroadcast(Intent("com.yourname.classroomagent.EDIT_APPROVED"))
                 }
-                "EDIT_REJECTED" -> {
+                trimmedCommand == "EDIT_REJECTED" -> {
                     sendBroadcast(Intent("com.yourname.classroomagent.EDIT_REJECTED"))
+                }
+                trimmedCommand.startsWith("SET_ALLOWED_APPS") -> {
+                    val parts = trimmedCommand.split("|")
+                    val newPackages = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
+                    newPackages.addAll(ClassWatcherService.DEFAULT_ALLOWED_PACKAGES)
+                    ClassWatcherService.allowedPackages = newPackages
+                    getSharedPreferences("setup", MODE_PRIVATE).edit()
+                        .putString("allowed_apps", newPackages.joinToString(","))
+                        .apply()
                 }
             }
         }

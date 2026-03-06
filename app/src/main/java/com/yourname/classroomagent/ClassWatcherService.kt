@@ -10,23 +10,21 @@ class ClassWatcherService : AccessibilityService() {
     companion object {
         var instance: ClassWatcherService? = null
         var isClassInSession = false
-    }
 
-    private val allowedPackages = setOf(
-        "com.microsoft.office.onenote",
-        "com.yourname.classroomagent",
-        "com.google.android.apps.nexuslauncher",
-        "com.android.launcher",
-        "com.android.launcher2",
-        "com.android.launcher3",
-        "com.sec.android.app.launcher",
-        "com.android.systemui",
-        // 키보드
-        "com.google.android.inputmethod.latin",  // 구글 키보드
-        "com.samsung.android.honeyboard",        // 삼성 키보드
-        "com.android.inputmethod.latin",         // 기본 키보드
-        "com.android.inputmethod.pinyin"         // 핀인 키보드
-    )
+        val DEFAULT_ALLOWED_PACKAGES = setOf(
+            "com.microsoft.office.onenote",
+            "com.yourname.classroomagent",
+            "com.android.systemui",
+            "com.google.android.inputmethod.latin",
+            "com.samsung.android.honeyboard",
+            "com.android.launcher",
+            "com.android.launcher2",
+            "com.android.launcher3",
+            "com.sec.android.app.launcher"
+        )
+
+        var allowedPackages: MutableSet<String> = DEFAULT_ALLOWED_PACKAGES.toMutableSet()
+    }
 
     override fun onServiceConnected() {
         instance = this
