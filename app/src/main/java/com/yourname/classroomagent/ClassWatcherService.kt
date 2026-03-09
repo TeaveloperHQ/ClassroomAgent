@@ -4,8 +4,22 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ClassWatcherService : AccessibilityService() {
+
+    private var consecutiveNonSuspicious = 0
+
+    private val systemUiPackages = setOf(
+        "com.android.systemui",
+        "com.samsung.android.cocktailbarservice",
+        "com.samsung.android.app.cocktailbarservice",
+        "com.sec.android.cocktailbar",
+        "com.samsung.android.edge.injection",
+        "com.samsung.android.app.edgetouch"
+    )
 
     companion object {
         var instance: ClassWatcherService? = null
@@ -24,6 +38,9 @@ class ClassWatcherService : AccessibilityService() {
         )
 
         var allowedPackages: MutableSet<String> = DEFAULT_ALLOWED_PACKAGES.toMutableSet()
+        var violationCount: MutableMap<String, Int> = mutableMapOf()
+        var suspiciousPackage: String? = null
+        var suspiciousTime: String? = null
     }
 
     override fun onServiceConnected() {
@@ -41,6 +58,21 @@ class ClassWatcherService : AccessibilityService() {
 
         if (!isClassInSession) return
 
+        val currentSuspicious = suspiciousPackage
+        if (currentSuspicious != null) {
+            if (pkg == currentSuspicious) {
+                consecutiveNonSuspicious = 0
+            } else {
+                consecutiveNonSuspicious++
+                if (consecutiveNonSuspicious >= 10) {
+                    suspiciousPackage = null
+                    suspiciousTime = null
+                    violationCount[currentSuspicious] = 0
+                    consecutiveNonSuspicious = 0
+                }
+            }
+        }
+
         if (pkg in allowedPackages) {
             startService(Intent(this, OverlayService::class.java).apply {
                 action = "HIDE"
@@ -53,6 +85,18 @@ class ClassWatcherService : AccessibilityService() {
             if (intent != null) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 startActivity(intent)
+            }
+
+            if (pkg in allowedPackages || pkg in systemUiPackages) {
+                android.util.Log.d("ClassWatcher", "우회 시도 제외 (시스템UI): $pkg")
+                return
+            }
+            val count = violationCount.getOrDefault(pkg, 0) + 1
+            violationCount[pkg] = count
+            if (count >= 10) {
+                suspiciousPackage = pkg
+                suspiciousTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                consecutiveNonSuspicious = 0
             }
         }
     }

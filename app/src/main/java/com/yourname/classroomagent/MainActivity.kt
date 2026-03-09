@@ -7,11 +7,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
+import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
@@ -28,6 +31,17 @@ class MainActivity : AppCompatActivity() {
     private val editRejectedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Toast.makeText(this@MainActivity, "선생님이 학적 수정 요청을 거절했습니다.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Log.d("ClassroomAgent", "VPN 권한 허용됨")
+        } else {
+            Log.w("ClassroomAgent", "VPN 권한 거부됨")
+            Toast.makeText(this, "VPN 권한이 필요합니다. 설정에서 허용해주세요.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -54,6 +68,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnEditRequest).setOnClickListener {
             AgentWebSocketServer.editRequested = true
             Toast.makeText(this, "학적 수정 요청을 전송했습니다", Toast.LENGTH_SHORT).show()
+        }
+
+        val vpnIntent = VpnService.prepare(this)
+        if (vpnIntent != null) {
+            vpnPermissionLauncher.launch(vpnIntent)
+        } else {
+            Log.d("ClassroomAgent", "VPN 권한 이미 허용됨")
         }
     }
 

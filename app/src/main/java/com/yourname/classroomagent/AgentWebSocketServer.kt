@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.VpnService
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import org.java_websocket.WebSocket
@@ -39,7 +40,12 @@ class AgentWebSocketServer(
             val sessionStatus = if (ClassWatcherService.isClassInSession) "IN_SESSION" else "IDLE"
             val accessibilityEnabled = isAccessibilityEnabled()
             val overlayEnabled = Settings.canDrawOverlays(context)
-            conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|EDIT_REQUEST:$editRequested")
+            val suspiciousPkg = ClassWatcherService.suspiciousPackage
+            val suspiciousField = if (suspiciousPkg != null)
+                "$suspiciousPkg:${ClassWatcherService.suspiciousTime ?: ""}"
+            else "none"
+            val vpnStatus = LocalVpnService.isRunning
+            conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|EDIT_REQUEST:$editRequested|SUSPICIOUS:$suspiciousField|VPN:$vpnStatus")
             return
         }
 
@@ -75,6 +81,39 @@ class AgentWebSocketServer(
                 conn.send("APP_LIST|")
             }
             return
+        }
+
+        if (command.startsWith("SET_ALLOWED_SITES")) {
+            val domains = command.split("|").drop(1).toMutableSet()
+            LocalVpnService.allowedDomains = domains
+            context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet("allowed_domains", domains)
+                .apply()
+            conn.send("OK|SET_ALLOWED_SITES")
+            return
+        }
+
+        if (command == "START") {
+            val prefs = context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+            LocalVpnService.allowedDomains = prefs
+                .getStringSet("allowed_domains", mutableSetOf())!!
+                .toMutableSet()
+            if (VpnService.prepare(context) == null) {
+                context.startService(
+                    Intent(context, LocalVpnService::class.java)
+                        .setAction(LocalVpnService.ACTION_START)
+                )
+            } else {
+                android.util.Log.w("ClassroomAgent", "VPN permission not yet granted")
+            }
+        }
+
+        if (command == "STOP") {
+            context.startService(
+                Intent(context, LocalVpnService::class.java)
+                    .setAction(LocalVpnService.ACTION_STOP)
+            )
         }
 
         if (command == "EDIT_APPROVED" || command == "EDIT_REJECTED") {

@@ -53,6 +53,15 @@
         </service>
 
 
+        <service
+            android:name=".LocalVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
         <!-- 추가: 부팅 시 자동 시작 -->
         <receiver
             android:name=".BootReceiver"
