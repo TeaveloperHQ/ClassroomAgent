@@ -84,12 +84,16 @@ class AgentWebSocketServer(
         }
 
         if (command.startsWith("SET_ALLOWED_SITES")) {
-            val domains = command.split("|").drop(1).toMutableSet()
-            LocalVpnService.allowedDomains = domains
+            android.util.Log.d("VpnService", "SET_ALLOWED_SITES 수신: $command")
+            val parts = command.split("|")
+            val domains = parts.drop(1).toMutableSet()
+            android.util.Log.d("VpnService", "도메인 목록: $domains")
+            LocalVpnService.updateAllowedDomains(domains)
             context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
                 .edit()
                 .putStringSet("allowed_domains", domains)
                 .apply()
+            android.util.Log.d("VpnService", "allowedDomains 업데이트 완료: ${LocalVpnService.allowedDomains}")
             conn.send("OK|SET_ALLOWED_SITES")
             return
         }
