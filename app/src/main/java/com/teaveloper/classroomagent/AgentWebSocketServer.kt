@@ -294,18 +294,14 @@ class AgentWebSocketServer(
 
     /**
      * Verify a signed gossip payload against the sender's mDNS-advertised pubkey.
-     * Drops the message on any failure: unknown peer, cross-class, missing pubkey,
-     * bad sig. Called for P2P_USAGE and P2P_DOMAIN only.
+     * Drops the message on unknown peer, missing pubkey, or bad signature.
+     * Cross-class messages are accepted — the aggregator's job is anomaly
+     * detection against a school-wide baseline, not per-class enforcement.
      */
     private fun verifyPeerSignature(sender: String, payload: String, sigB64: String): Boolean {
         val peer = PeerRegistry.get(sender)
         if (peer == null) {
             android.util.Log.w("Gossip", "unknown peer $sender — drop")
-            return false
-        }
-        val myClass = PeerIdentity.myClassId
-        if (myClass.isEmpty() || peer.classId != myClass) {
-            android.util.Log.w("Gossip", "cross-class or unset ($sender cls=${peer.classId}) — drop")
             return false
         }
         val pubkey = peer.publicKeyB64 ?: run {

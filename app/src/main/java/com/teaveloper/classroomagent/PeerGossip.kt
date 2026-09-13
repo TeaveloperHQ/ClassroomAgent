@@ -61,12 +61,11 @@ object PeerGossip {
     }
 
     private fun broadcastToPeers(msg: String) {
-        // Only gossip within our own class — different classes on the same
-        // Wi-Fi must not cross-contaminate consensus. If we haven't set a
-        // class id yet (fresh install pre-setup), skip gossip entirely.
-        val myClass = PeerIdentity.myClassId
-        if (myClass.isEmpty()) return
-        val peers = PeerRegistry.inClass(myClass)
+        // Gossip to every discovered agent, regardless of class. Cross-class
+        // data is not contamination — it's more signal for what counts as
+        // legitimate educational activity in this school. Class id survives
+        // as metadata for DIAG but is not used for filtering.
+        val peers = PeerRegistry.all()
         if (peers.isEmpty()) return
         executor.submit {
             for (peer in peers) {
