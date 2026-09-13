@@ -201,7 +201,11 @@ class OverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "SHOW" -> showOverlay(intent.getStringExtra("reason") ?: "PENDING")
+            "SHOW" -> showOverlay(
+                reason = intent.getStringExtra("reason") ?: "PENDING",
+                count = intent.getIntExtra("count", -1),
+                threshold = intent.getIntExtra("threshold", -1)
+            )
             "HIDE" -> hideOverlay()
             "RE_REGISTER_MDNS" -> reregisterMdns()
         }
@@ -237,12 +241,13 @@ class OverlayService : Service() {
             .build()
     }
 
-    private fun showOverlay(reason: String) {
-        android.util.Log.d("OverlayService", "showOverlay: $reason")
+    private fun showOverlay(reason: String, count: Int = -1, threshold: Int = -1) {
+        android.util.Log.d("OverlayService", "showOverlay: $reason count=$count/$threshold")
+        val text = overlayTextFor(reason, count, threshold)
         // If already shown, just update text — keeps banner alive across app switches.
         val existing = overlayView
         if (existing != null) {
-            existing.text = overlayTextFor(reason)
+            existing.text = text
             existing.setBackgroundColor(overlayBgFor(reason))
             return
         }
@@ -258,7 +263,7 @@ class OverlayService : Service() {
             gravity = Gravity.TOP
         }
         overlayView = TextView(this).apply {
-            text = overlayTextFor(reason)
+            this.text = text
             textSize = 16f
             setTextColor(Color.WHITE)
             setBackgroundColor(overlayBgFor(reason))
@@ -268,9 +273,13 @@ class OverlayService : Service() {
         windowManager.addView(overlayView, params)
     }
 
-    private fun overlayTextFor(reason: String): String = when (reason) {
+    private fun overlayTextFor(reason: String, count: Int, threshold: Int): String = when (reason) {
         "DENIED" -> "이 앱은 사용할 수 없습니다 · 교사 제한"
-        else -> "이 앱은 아직 합의되지 않았습니다 · 같은 반이 함께 쓰면 자동 허용"
+        else -> if (count >= 0 && threshold > 0) {
+            "이 앱은 합의 대기 중 ($count/$threshold 명) · 함께 쓰면 자동 허용"
+        } else {
+            "이 앱은 아직 합의되지 않았습니다 · 같은 반이 함께 쓰면 자동 허용"
+        }
     }
 
     private fun overlayBgFor(reason: String): Int = when (reason) {

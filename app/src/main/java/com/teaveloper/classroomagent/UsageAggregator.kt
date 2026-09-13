@@ -47,13 +47,13 @@ object UsageAggregator {
         consensusPromoted.clear()
     }
 
-    private fun currentThreshold(): Int {
+    fun currentThreshold(): Int {
         val rosterSize = PeerRegistry.size() + 1
         val ratioThreshold = (rosterSize * THRESHOLD_RATIO).toInt().coerceAtLeast(1)
         return maxOf(MIN_PEERS_FOR_PROMOTION, ratioThreshold)
     }
 
-    private fun activeCount(pkg: String): Int {
+    fun activeCount(pkg: String): Int {
         val cutoff = System.currentTimeMillis() - WINDOW_MS
         return observations[pkg]?.count { it.value >= cutoff } ?: 0
     }

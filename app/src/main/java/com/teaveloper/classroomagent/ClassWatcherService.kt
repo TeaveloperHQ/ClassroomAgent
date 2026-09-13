@@ -131,9 +131,13 @@ class ClassWatcherService : AccessibilityService() {
                 })
             }
             pkg !in systemUiPackages -> {
+                val activeCount = UsageAggregator.activeCount(pkg)
+                val threshold = UsageAggregator.currentThreshold()
                 startService(Intent(this, OverlayService::class.java).apply {
                     action = "SHOW"
                     putExtra("reason", "PENDING")
+                    putExtra("count", activeCount)
+                    putExtra("threshold", threshold)
                 })
                 val count = violationCount.getOrDefault(pkg, 0) + 1
                 violationCount[pkg] = count
