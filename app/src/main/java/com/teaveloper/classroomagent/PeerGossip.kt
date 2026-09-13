@@ -36,7 +36,12 @@ object PeerGossip {
         val me = PeerIdentity.myName
         if (me.isEmpty()) return
         val ts = System.currentTimeMillis()
-        broadcastToPeers("P2P_USAGE|$pkg|$ts|$me")
+        val payload = "$pkg|$ts|$me"
+        val sig = runCatching { PeerIdentity.signB64(payload.toByteArray()) }.getOrElse {
+            android.util.Log.w("Gossip", "sign 실패: ${it.message}")
+            return
+        }
+        broadcastToPeers("P2P_USAGE|$payload|$sig")
     }
 
     fun sendDomainEvent(domain: String) {
@@ -47,7 +52,12 @@ object PeerGossip {
         val last = lastGossipAt[key] ?: 0L
         if (now - last < DOMAIN_DEDUPE_MS) return
         lastGossipAt[key] = now
-        broadcastToPeers("P2P_DOMAIN|$domain|$now|$me")
+        val payload = "$domain|$now|$me"
+        val sig = runCatching { PeerIdentity.signB64(payload.toByteArray()) }.getOrElse {
+            android.util.Log.w("Gossip", "sign 실패: ${it.message}")
+            return
+        }
+        broadcastToPeers("P2P_DOMAIN|$payload|$sig")
     }
 
     private fun broadcastToPeers(msg: String) {

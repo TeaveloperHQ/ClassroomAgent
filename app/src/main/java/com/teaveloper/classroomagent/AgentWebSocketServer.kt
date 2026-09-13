@@ -129,23 +129,31 @@ class AgentWebSocketServer(
 
         if (command.startsWith("P2P_USAGE|")) {
             val parts = command.split("|")
-            if (parts.size >= 4) {
+            if (parts.size >= 5) {
                 val pkg = parts[1]
-                val ts = parts[2].toLongOrNull() ?: System.currentTimeMillis()
+                val tsStr = parts[2]
                 val sender = parts[3]
-                UsageAggregator.record(pkg, sender, ts)
-                android.util.Log.d("Gossip", "peer $sender used $pkg @ $ts")
+                val sig = parts[4]
+                if (verifyPeerSignature(sender, "$pkg|$tsStr|$sender", sig)) {
+                    val ts = tsStr.toLongOrNull() ?: System.currentTimeMillis()
+                    UsageAggregator.record(pkg, sender, ts)
+                    android.util.Log.d("Gossip", "peer $sender used $pkg @ $ts (verified)")
+                }
             }
             return
         }
 
         if (command.startsWith("P2P_DOMAIN|")) {
             val parts = command.split("|")
-            if (parts.size >= 4) {
+            if (parts.size >= 5) {
                 val domain = parts[1]
-                val ts = parts[2].toLongOrNull() ?: System.currentTimeMillis()
+                val tsStr = parts[2]
                 val sender = parts[3]
-                DomainUsageAggregator.record(domain, sender, ts)
+                val sig = parts[4]
+                if (verifyPeerSignature(sender, "$domain|$tsStr|$sender", sig)) {
+                    val ts = tsStr.toLongOrNull() ?: System.currentTimeMillis()
+                    DomainUsageAggregator.record(domain, sender, ts)
+                }
             }
             return
         }
@@ -239,6 +247,22 @@ class AgentWebSocketServer(
 
     override fun onError(conn: WebSocket?, ex: Exception) {
         android.util.Log.e("WebSocket", "에러: ${ex.message}")
+    }
+
+    /**
+     * Verify a signed gossip payload against the sender's mDNS-advertised pubkey.
+     * Drops the message on any failure: unknown peer, missing pubkey, bad sig.
+     * Called for P2P_USAGE and P2P_DOMAIN only.
+     */
+    private fun verifyPeerSignature(sender: String, payload: String, sigB64: String): Boolean {
+        val pubkey = PeerRegistry.get(sender)?.publicKeyB64
+        if (pubkey == null) {
+            android.util.Log.w("Gossip", "unknown peer $sender — drop")
+            return false
+        }
+        val ok = PeerIdentity.verify(pubkey, payload.toByteArray(), sigB64)
+        if (!ok) android.util.Log.w("Gossip", "bad sig from $sender — drop")
+        return ok
     }
 
     private fun isAccessibilityEnabled(): Boolean {
