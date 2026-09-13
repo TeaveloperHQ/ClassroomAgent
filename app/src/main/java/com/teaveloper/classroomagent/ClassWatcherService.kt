@@ -25,6 +25,14 @@ class ClassWatcherService : AccessibilityService() {
     companion object {
         var instance: ClassWatcherService? = null
         var isClassInSession = false
+        /**
+         * Epoch ms of the last START. During the grace period after START,
+         * pending-app banners are suppressed — students shouldn't get scolded
+         * for opening a normal-but-new app during the first few minutes of
+         * class while consensus hasn't formed yet.
+         */
+        @Volatile var classStartedAtMs: Long = 0L
+        const val BOOTSTRAP_GRACE_MS = 5 * 60 * 1000L
 
         val DEFAULT_ALLOWED_PACKAGES = setOf(
             "com.microsoft.office.onenote",
@@ -131,14 +139,18 @@ class ClassWatcherService : AccessibilityService() {
                 })
             }
             pkg !in systemUiPackages -> {
-                val activeCount = UsageAggregator.activeCount(pkg)
-                val threshold = UsageAggregator.currentThreshold()
-                startService(Intent(this, OverlayService::class.java).apply {
-                    action = "SHOW"
-                    putExtra("reason", "PENDING")
-                    putExtra("count", activeCount)
-                    putExtra("threshold", threshold)
-                })
+                val inGrace = classStartedAtMs > 0 &&
+                    System.currentTimeMillis() - classStartedAtMs < BOOTSTRAP_GRACE_MS
+                if (!inGrace) {
+                    val activeCount = UsageAggregator.activeCount(pkg)
+                    val threshold = UsageAggregator.currentThreshold()
+                    startService(Intent(this, OverlayService::class.java).apply {
+                        action = "SHOW"
+                        putExtra("reason", "PENDING")
+                        putExtra("count", activeCount)
+                        putExtra("threshold", threshold)
+                    })
+                }
                 val count = violationCount.getOrDefault(pkg, 0) + 1
                 violationCount[pkg] = count
                 if (count >= 10) {

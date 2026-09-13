@@ -53,9 +53,11 @@ class OverlayService : Service() {
             when {
                 trimmedCommand == "START" -> {
                     ClassWatcherService.isClassInSession = true
+                    ClassWatcherService.classStartedAtMs = System.currentTimeMillis()
                 }
                 trimmedCommand == "STOP" -> {
                     ClassWatcherService.isClassInSession = false
+                    ClassWatcherService.classStartedAtMs = 0L
                 }
                 trimmedCommand == "EDIT_APPROVED" -> {
                     sendBroadcast(Intent("com.teaveloper.classroomagent.EDIT_APPROVED"))
