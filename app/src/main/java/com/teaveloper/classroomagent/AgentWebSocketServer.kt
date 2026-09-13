@@ -72,7 +72,18 @@ class AgentWebSocketServer(
                 "$suspiciousPkg:${ClassWatcherService.suspiciousTime ?: ""}"
             else "none"
             val vpnStatus = LocalVpnService.isRunning
-            conn.send("$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|EDIT_REQUEST:$editRequested|SUSPICIOUS:$suspiciousField|VPN:$vpnStatus")
+            val peerCount = PeerRegistry.size()
+            val consensusSummary = UsageAggregator.snapshot()
+                .entries
+                .sortedByDescending { it.value }
+                .take(5)
+                .joinToString(",") { "${it.key}=${it.value}" }
+                .ifEmpty { "none" }
+            conn.send(
+                "$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|" +
+                "EDIT_REQUEST:$editRequested|SUSPICIOUS:$suspiciousField|VPN:$vpnStatus|" +
+                "PEERS:$peerCount|CONSENSUS:$consensusSummary"
+            )
             return
         }
 
@@ -133,6 +144,19 @@ class AgentWebSocketServer(
                 .putStringSet("allowed_apps", apps)
                 .apply()
             conn.send("OK|SET_ALLOWED_APPS|${apps.size}")
+            return
+        }
+
+        if (command.startsWith("SET_DENIED_APPS")) {
+            val parts = command.split("|")
+            val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
+            android.util.Log.d("Denylist", "SET_DENIED_APPS 수신: ${apps.size}개")
+            ClassWatcherService.deniedPackages = apps
+            context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet("denied_apps", apps)
+                .apply()
+            conn.send("OK|SET_DENIED_APPS|${apps.size}")
             return
         }
 
