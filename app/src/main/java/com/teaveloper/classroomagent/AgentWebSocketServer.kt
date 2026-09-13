@@ -93,6 +93,41 @@ class AgentWebSocketServer(
             return
         }
 
+        if (command == "DIAG") {
+            // Full snapshot for on-site debugging via adb + wscat.
+            // Not for normal teacher UI — STATUS covers that. Format is
+            // multiline plain text, one field per line, easy to read.
+            val sb = StringBuilder()
+            sb.appendLine("== DIAG ==")
+            sb.appendLine("session=${ClassWatcherService.isClassInSession}")
+            sb.appendLine("myName=${PeerIdentity.myName}")
+            sb.appendLine("peers=${PeerRegistry.size()}")
+            PeerRegistry.all().sortedBy { it.name }.forEach {
+                sb.appendLine("  peer ${it.name} ${it.host}:${it.port}")
+            }
+            sb.appendLine("allowedPackages(${ClassWatcherService.allowedPackages.size})=" +
+                ClassWatcherService.allowedPackages.sorted().joinToString(","))
+            sb.appendLine("deniedPackages(${ClassWatcherService.deniedPackages.size})=" +
+                ClassWatcherService.deniedPackages.sorted().joinToString(","))
+            sb.appendLine("consensus(threshold=${UsageAggregator.currentThreshold()}):")
+            UsageAggregator.snapshot().entries
+                .sortedByDescending { it.value }
+                .take(10)
+                .forEach { sb.appendLine("  ${it.key}=${it.value}") }
+            sb.appendLine("domains:")
+            DomainUsageAggregator.snapshot().entries
+                .sortedByDescending { it.value }
+                .take(10)
+                .forEach { sb.appendLine("  ${it.key}=${it.value}") }
+            sb.appendLine("allowedDomains(${LocalVpnService.allowedDomains.size})=" +
+                LocalVpnService.allowedDomains.sorted().joinToString(","))
+            sb.appendLine("deniedDomains(${LocalVpnService.deniedDomains.size})=" +
+                LocalVpnService.deniedDomains.sorted().joinToString(","))
+            sb.append("== END ==")
+            conn.send(sb.toString())
+            return
+        }
+
         if (command == "GET_APPS") {
             try {
                 val allApps = context.packageManager.getInstalledApplications(0)
