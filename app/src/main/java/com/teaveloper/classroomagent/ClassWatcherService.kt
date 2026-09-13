@@ -115,6 +115,7 @@ class ClassWatcherService : AccessibilityService() {
                 }
                 startService(Intent(this, OverlayService::class.java).apply {
                     action = "SHOW"
+                    putExtra("reason", "DENIED")
                 })
                 val count = violationCount.getOrDefault(pkg, 0) + 1
                 violationCount[pkg] = count
@@ -132,6 +133,7 @@ class ClassWatcherService : AccessibilityService() {
             pkg !in systemUiPackages -> {
                 startService(Intent(this, OverlayService::class.java).apply {
                     action = "SHOW"
+                    putExtra("reason", "PENDING")
                 })
                 val count = violationCount.getOrDefault(pkg, 0) + 1
                 violationCount[pkg] = count

@@ -201,7 +201,7 @@ class OverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "SHOW" -> showOverlay()
+            "SHOW" -> showOverlay(intent.getStringExtra("reason") ?: "PENDING")
             "HIDE" -> hideOverlay()
             "RE_REGISTER_MDNS" -> reregisterMdns()
         }
@@ -237,25 +237,45 @@ class OverlayService : Service() {
             .build()
     }
 
-    private fun showOverlay() {
-        android.util.Log.d("OverlayService", "showOverlay 호출됨")
-        if (overlayView != null) return
+    private fun showOverlay(reason: String) {
+        android.util.Log.d("OverlayService", "showOverlay: $reason")
+        // If already shown, just update text — keeps banner alive across app switches.
+        val existing = overlayView
+        if (existing != null) {
+            existing.text = overlayTextFor(reason)
+            existing.setBackgroundColor(overlayBgFor(reason))
+            return
+        }
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
-        )
+        ).apply {
+            gravity = Gravity.TOP
+        }
         overlayView = TextView(this).apply {
-            text = "수업 중입니다\nOneNote만 사용할 수 있습니다"
-            textSize = 24f
+            text = overlayTextFor(reason)
+            textSize = 16f
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.argb(220, 0, 0, 0))
+            setBackgroundColor(overlayBgFor(reason))
             gravity = Gravity.CENTER
+            setPadding(24, 32, 24, 32)
         }
         windowManager.addView(overlayView, params)
+    }
+
+    private fun overlayTextFor(reason: String): String = when (reason) {
+        "DENIED" -> "이 앱은 사용할 수 없습니다 · 교사 제한"
+        else -> "이 앱은 아직 합의되지 않았습니다 · 같은 반이 함께 쓰면 자동 허용"
+    }
+
+    private fun overlayBgFor(reason: String): Int = when (reason) {
+        "DENIED" -> Color.argb(230, 180, 30, 30)   // red band for hard block
+        else -> Color.argb(210, 30, 30, 30)         // dim charcoal for soft warning
     }
 
     private fun hideOverlay() {
