@@ -126,6 +126,8 @@ class AgentWebSocketServer(
                 LocalVpnService.allowedDomains.sorted().joinToString(","))
             sb.appendLine("deniedDomains(${LocalVpnService.deniedDomains.size})=" +
                 LocalVpnService.deniedDomains.sorted().joinToString(","))
+            val regularNow = BehaviorHistory.regularForNow()
+            sb.appendLine("historyRegularNow(${regularNow.size})=${regularNow.sorted().joinToString(",")}")
             sb.appendLine("recent events:")
             EventLog.recent(20).forEach { sb.appendLine("  $it") }
             sb.append("== END ==")
