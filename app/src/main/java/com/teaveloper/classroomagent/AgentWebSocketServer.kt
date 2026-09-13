@@ -79,10 +79,16 @@ class AgentWebSocketServer(
                 .take(5)
                 .joinToString(",") { "${it.key}=${it.value}" }
                 .ifEmpty { "none" }
+            val domainSummary = DomainUsageAggregator.snapshot()
+                .entries
+                .sortedByDescending { it.value }
+                .take(5)
+                .joinToString(",") { "${it.key}=${it.value}" }
+                .ifEmpty { "none" }
             conn.send(
                 "$sessionStatus|ACCESSIBILITY:$accessibilityEnabled|OVERLAY:$overlayEnabled|" +
                 "EDIT_REQUEST:$editRequested|SUSPICIOUS:$suspiciousField|VPN:$vpnStatus|" +
-                "PEERS:$peerCount|CONSENSUS:$consensusSummary"
+                "PEERS:$peerCount|CONSENSUS:$consensusSummary|DOMAINS:$domainSummary"
             )
             return
         }
@@ -133,6 +139,17 @@ class AgentWebSocketServer(
             return
         }
 
+        if (command.startsWith("P2P_DOMAIN|")) {
+            val parts = command.split("|")
+            if (parts.size >= 4) {
+                val domain = parts[1]
+                val ts = parts[2].toLongOrNull() ?: System.currentTimeMillis()
+                val sender = parts[3]
+                DomainUsageAggregator.record(domain, sender, ts)
+            }
+            return
+        }
+
         if (command.startsWith("SET_ALLOWED_APPS")) {
             val parts = command.split("|")
             val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
@@ -160,6 +177,18 @@ class AgentWebSocketServer(
             return
         }
 
+        if (command.startsWith("SET_DENIED_SITES")) {
+            val parts = command.split("|")
+            val domains = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
+            LocalVpnService.updateDeniedDomains(domains)
+            context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet("denied_domains", domains)
+                .apply()
+            conn.send("OK|SET_DENIED_SITES|${domains.size}")
+            return
+        }
+
         if (command.startsWith("SET_ALLOWED_SITES")) {
             android.util.Log.d("VpnService", "SET_ALLOWED_SITES 수신: $command")
             val parts = command.split("|")
@@ -179,6 +208,9 @@ class AgentWebSocketServer(
             val prefs = context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
             LocalVpnService.allowedDomains = prefs
                 .getStringSet("allowed_domains", mutableSetOf())!!
+                .toMutableSet()
+            LocalVpnService.deniedDomains = prefs
+                .getStringSet("denied_domains", mutableSetOf())!!
                 .toMutableSet()
             if (VpnService.prepare(context) == null) {
                 context.startService(

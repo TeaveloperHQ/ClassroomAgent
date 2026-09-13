@@ -27,11 +27,30 @@ object PeerGossip {
         Thread(r, "PeerGossip").apply { isDaemon = true }
     }
 
+    // Per-key last-sent timestamp for gossip rate limiting. DNS in particular
+    // fires many queries per page load — we don't want to blast peers with them.
+    private val lastGossipAt = ConcurrentHashMap<String, Long>()
+    private const val DOMAIN_DEDUPE_MS = 30_000L
+
     fun sendUsageEvent(pkg: String) {
         val me = PeerIdentity.myName
         if (me.isEmpty()) return
         val ts = System.currentTimeMillis()
-        val msg = "P2P_USAGE|$pkg|$ts|$me"
+        broadcastToPeers("P2P_USAGE|$pkg|$ts|$me")
+    }
+
+    fun sendDomainEvent(domain: String) {
+        val me = PeerIdentity.myName
+        if (me.isEmpty() || domain.isBlank()) return
+        val now = System.currentTimeMillis()
+        val key = "d:$domain"
+        val last = lastGossipAt[key] ?: 0L
+        if (now - last < DOMAIN_DEDUPE_MS) return
+        lastGossipAt[key] = now
+        broadcastToPeers("P2P_DOMAIN|$domain|$now|$me")
+    }
+
+    private fun broadcastToPeers(msg: String) {
         val peers = PeerRegistry.all()
         if (peers.isEmpty()) return
         executor.submit {

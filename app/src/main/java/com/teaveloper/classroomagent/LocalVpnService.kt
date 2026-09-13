@@ -14,6 +14,8 @@ class LocalVpnService : VpnService() {
 
     companion object {
         @Volatile var allowedDomains: Set<String> = emptySet()
+        /** Teacher-mandated hard block — takes precedence over allowedDomains. */
+        @Volatile var deniedDomains: Set<String> = emptySet()
         var isRunning = false
         const val ACTION_START = "START_VPN"
         const val ACTION_STOP = "STOP_VPN"
@@ -22,6 +24,11 @@ class LocalVpnService : VpnService() {
             Log.d("VpnService", "updateAllowedDomains 호출: $domains")
             allowedDomains = domains.toHashSet()
             Log.d("VpnService", "업데이트 후 allowedDomains: $allowedDomains")
+        }
+
+        fun updateDeniedDomains(domains: Set<String>) {
+            deniedDomains = domains.toHashSet()
+            Log.d("VpnService", "deniedDomains 업데이트: $deniedDomains")
         }
     }
 
@@ -73,6 +80,12 @@ class LocalVpnService : VpnService() {
 
             val domain = extractDomain(packet, length)
             if (domain != null) {
+                // Observe every DNS query — gossip to peers + local aggregator.
+                // Rate limiting (30s per domain) lives in PeerGossip so DNS bursts
+                // don't flood the network.
+                DomainUsageAggregator.record(domain, PeerIdentity.myName, System.currentTimeMillis())
+                PeerGossip.sendDomainEvent(domain)
+
                 if (isAllowed(domain)) {
                     Log.d("VpnService", "DNS 전달 시작: $domain")
                     val response = forwardDnsQuery(packet, length)
@@ -121,12 +134,15 @@ class LocalVpnService : VpnService() {
     }
 
     private fun isAllowed(domain: String): Boolean {
-        val domains = allowedDomains
-        Log.d("VpnService", "isAllowed 체크: $domain, allowedDomains: $domains")
-        if (domains.contains("*")) {
-            Log.d("VpnService", "와일드카드 허용: $domain")
-            return true
+        // 1. Teacher-mandated denials override everything.
+        val denied = deniedDomains
+        if (denied.any { d -> domain == d || domain.endsWith(".$d") }) {
+            Log.d("VpnService", "denied 매칭, 차단: $domain")
+            return false
         }
+        // 2. Existing whitelist logic.
+        val domains = allowedDomains
+        if (domains.contains("*")) return true
         if (domains.isEmpty()) {
             Log.d("VpnService", "목록 비어있음, 차단: $domain")
             return false
