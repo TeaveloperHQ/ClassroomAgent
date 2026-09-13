@@ -164,6 +164,9 @@ class AgentWebSocketServer(
             android.util.Log.d("Allowlist", "SET_ALLOWED_APPS 수신: ${apps.size}개")
             // Merge with defaults so system UI / IME / launcher are never blocked
             ClassWatcherService.allowedPackages = (ClassWatcherService.DEFAULT_ALLOWED_PACKAGES + apps).toMutableSet()
+            // Teacher's list is authoritative — consensus additions dropped, will
+            // rebuild organically on next observation.
+            UsageAggregator.forgetConsensusPromotions()
             context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
                 .edit()
                 .putStringSet("allowed_apps", apps)

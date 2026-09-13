@@ -23,26 +23,69 @@ object UsageAggregator {
     /** pkg → (peerName → lastSeenEpochMs). One entry per distinct peer. */
     private val observations = ConcurrentHashMap<String, ConcurrentHashMap<String, Long>>()
 
+    /**
+     * Apps that this agent added to allowedPackages via consensus (not via
+     * DEFAULT_ALLOWED_PACKAGES or teacher SET_ALLOWED_APPS). Only entries here
+     * are subject to decay-based demotion — teacher/default entries are never
+     * removed automatically.
+     */
+    private val consensusPromoted = ConcurrentHashMap.newKeySet<String>()
+
     fun record(pkg: String, peerName: String, epochMs: Long) {
         if (pkg.isBlank() || peerName.isBlank()) return
         observations.getOrPut(pkg) { ConcurrentHashMap() }[peerName] = epochMs
         maybePromote(pkg)
+        sweep()
+    }
+
+    /**
+     * Called when teacher pushes a fresh allowlist. Consensus additions are
+     * dropped so the teacher's list is authoritative; consensus can re-promote
+     * anything not on the teacher's list on the next observation.
+     */
+    fun forgetConsensusPromotions() {
+        consensusPromoted.clear()
+    }
+
+    private fun currentThreshold(): Int {
+        val rosterSize = PeerRegistry.size() + 1
+        val ratioThreshold = (rosterSize * THRESHOLD_RATIO).toInt().coerceAtLeast(1)
+        return maxOf(MIN_PEERS_FOR_PROMOTION, ratioThreshold)
+    }
+
+    private fun activeCount(pkg: String): Int {
+        val cutoff = System.currentTimeMillis() - WINDOW_MS
+        return observations[pkg]?.count { it.value >= cutoff } ?: 0
     }
 
     private fun maybePromote(pkg: String) {
-        val cutoff = System.currentTimeMillis() - WINDOW_MS
-        val active = observations[pkg]?.count { it.value >= cutoff } ?: 0
-        // roster = discovered peers + self
-        val rosterSize = PeerRegistry.size() + 1
-        val ratioThreshold = (rosterSize * THRESHOLD_RATIO).toInt().coerceAtLeast(1)
-        val threshold = maxOf(MIN_PEERS_FOR_PROMOTION, ratioThreshold)
+        val active = activeCount(pkg)
+        val threshold = currentThreshold()
         if (active >= threshold && pkg !in ClassWatcherService.allowedPackages) {
             ClassWatcherService.allowedPackages =
                 (ClassWatcherService.allowedPackages + pkg).toMutableSet()
+            consensusPromoted += pkg
             android.util.Log.d(
                 "Aggregator",
-                "$pkg 합의로 승격 ($active/$rosterSize peers, threshold=$threshold)"
+                "$pkg 합의로 승격 ($active/${PeerRegistry.size() + 1} peers, threshold=$threshold)"
             )
+        }
+    }
+
+    /**
+     * Demote consensus-promoted apps whose distinct-peer count fell below the
+     * threshold. Teacher-mandated / default apps are never touched — only
+     * entries this agent itself promoted are eligible.
+     */
+    private fun sweep() {
+        val threshold = currentThreshold()
+        val toRemove = consensusPromoted.filter { activeCount(it) < threshold }
+        if (toRemove.isEmpty()) return
+        for (pkg in toRemove) {
+            consensusPromoted.remove(pkg)
+            ClassWatcherService.allowedPackages =
+                (ClassWatcherService.allowedPackages - pkg).toMutableSet()
+            android.util.Log.d("Aggregator", "$pkg 합의 만료로 강등")
         }
     }
 
