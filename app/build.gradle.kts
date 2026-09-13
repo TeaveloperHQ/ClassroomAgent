@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.yourname.classroomagent"
+    namespace = "com.teaveloper.classroomagent"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.yourname.classroomagent"
+        applicationId = "com.teaveloper.classroomagent"
         minSdk = 26
         targetSdk = 33
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.yourname.classroomagent.ui.theme
+package com.teaveloper.classroomagent.ui.theme
 
 import android.app.Activity
 import android.os.Build

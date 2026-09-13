@@ -1,4 +1,4 @@
-package com.yourname.classroomagent
+package com.teaveloper.classroomagent
 
 import android.content.BroadcastReceiver
 import android.content.Context

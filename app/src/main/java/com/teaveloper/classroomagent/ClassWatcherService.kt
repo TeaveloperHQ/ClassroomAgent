@@ -1,4 +1,4 @@
-package com.yourname.classroomagent
+package com.teaveloper.classroomagent
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -27,7 +27,7 @@ class ClassWatcherService : AccessibilityService() {
 
         val DEFAULT_ALLOWED_PACKAGES = setOf(
             "com.microsoft.office.onenote",
-            "com.yourname.classroomagent",
+            "com.teaveloper.classroomagent",
             "com.android.systemui",
             "com.google.android.inputmethod.latin",
             "com.samsung.android.honeyboard",

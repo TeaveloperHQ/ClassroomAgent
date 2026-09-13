@@ -1,4 +1,4 @@
-package com.yourname.classroomagent.ui.theme
+package com.teaveloper.classroomagent.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

@@ -1,4 +1,4 @@
-package com.yourname.classroomagent
+package com.teaveloper.classroomagent
 
 import androidx.core.net.toUri
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -83,13 +83,13 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.registerReceiver(
             this,
             editApprovedReceiver,
-            IntentFilter("com.yourname.classroomagent.EDIT_APPROVED"),
+            IntentFilter("com.teaveloper.classroomagent.EDIT_APPROVED"),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         ContextCompat.registerReceiver(
             this,
             editRejectedReceiver,
-            IntentFilter("com.yourname.classroomagent.EDIT_REJECTED"),
+            IntentFilter("com.teaveloper.classroomagent.EDIT_REJECTED"),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         checkPermissions()

@@ -1,4 +1,4 @@
-package com.yourname.classroomagent
+package com.teaveloper.classroomagent
 
 import android.app.*
 import android.content.Context
@@ -54,10 +54,10 @@ class OverlayService : Service() {
                     ClassWatcherService.isClassInSession = false
                 }
                 trimmedCommand == "EDIT_APPROVED" -> {
-                    sendBroadcast(Intent("com.yourname.classroomagent.EDIT_APPROVED"))
+                    sendBroadcast(Intent("com.teaveloper.classroomagent.EDIT_APPROVED"))
                 }
                 trimmedCommand == "EDIT_REJECTED" -> {
-                    sendBroadcast(Intent("com.yourname.classroomagent.EDIT_REJECTED"))
+                    sendBroadcast(Intent("com.teaveloper.classroomagent.EDIT_REJECTED"))
                 }
                 trimmedCommand.startsWith("SET_ALLOWED_APPS") -> {
                     val parts = trimmedCommand.split("|")
