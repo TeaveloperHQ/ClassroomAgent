@@ -18,13 +18,14 @@ object PeerRegistry {
         val host: String,
         val port: Int,
         val publicKeyB64: String?,
+        val classId: String?,
         val lastSeenMs: Long
     )
 
     private val peers = ConcurrentHashMap<String, Peer>()
 
-    fun upsert(name: String, host: String, port: Int, publicKeyB64: String?) {
-        peers[name] = Peer(name, host, port, publicKeyB64, System.currentTimeMillis())
+    fun upsert(name: String, host: String, port: Int, publicKeyB64: String?, classId: String?) {
+        peers[name] = Peer(name, host, port, publicKeyB64, classId, System.currentTimeMillis())
     }
 
     fun remove(name: String) {
@@ -35,7 +36,14 @@ object PeerRegistry {
 
     fun all(): List<Peer> = peers.values.toList()
 
+    /** Peers whose classId matches the given one. Empty classId = no isolation, returns none. */
+    fun inClass(classId: String): List<Peer> =
+        if (classId.isBlank()) emptyList()
+        else peers.values.filter { it.classId == classId }
+
     fun size(): Int = peers.size
+
+    fun sizeInClass(classId: String): Int = inClass(classId).size
 
     fun clear() {
         peers.clear()

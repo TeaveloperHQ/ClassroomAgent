@@ -96,6 +96,10 @@ class OverlayService : Service() {
             port = 8080
             // Advertise our signing pubkey so peers can verify our gossip.
             setAttribute("pk", PeerIdentity.publicKeyB64())
+            // Advertise class id so peers filter cross-class gossip.
+            if (PeerIdentity.myClassId.isNotEmpty()) {
+                setAttribute("cls", PeerIdentity.myClassId)
+            }
         }
 
         nsdListener = object : android.net.nsd.NsdManager.RegistrationListener {
@@ -139,10 +143,11 @@ class OverlayService : Service() {
             override fun onServiceResolved(info: android.net.nsd.NsdServiceInfo) {
                 val host = info.host?.hostAddress ?: return
                 val pk = info.attributes?.get("pk")?.let { String(it, Charsets.UTF_8) }
-                PeerRegistry.upsert(info.serviceName, host, info.port, pk)
+                val cls = info.attributes?.get("cls")?.let { String(it, Charsets.UTF_8) }
+                PeerRegistry.upsert(info.serviceName, host, info.port, pk, cls)
                 android.util.Log.d(
                     "Peer",
-                    "발견: ${info.serviceName} @ $host:${info.port} pk=${pk?.take(12)}… (총 ${PeerRegistry.size()})"
+                    "발견: ${info.serviceName} @ $host:${info.port} cls=$cls (총 ${PeerRegistry.size()})"
                 )
             }
         }

@@ -48,7 +48,10 @@ object UsageAggregator {
     }
 
     fun currentThreshold(): Int {
-        val rosterSize = PeerRegistry.size() + 1
+        // Roster = same-class peers + self. Cross-class peers on the same LAN
+        // are ignored so 3학년2반 태블릿 사용 패턴이 2학년5반 합의를 오염
+        // 시키지 않는다.
+        val rosterSize = PeerRegistry.sizeInClass(PeerIdentity.myClassId) + 1
         val ratioThreshold = (rosterSize * THRESHOLD_RATIO).toInt().coerceAtLeast(1)
         return maxOf(MIN_PEERS_FOR_PROMOTION, ratioThreshold)
     }

@@ -100,10 +100,13 @@ class AgentWebSocketServer(
             val sb = StringBuilder()
             sb.appendLine("== DIAG ==")
             sb.appendLine("session=${ClassWatcherService.isClassInSession}")
-            sb.appendLine("myName=${PeerIdentity.myName}")
-            sb.appendLine("peers=${PeerRegistry.size()}")
-            PeerRegistry.all().sortedBy { it.name }.forEach {
-                sb.appendLine("  peer ${it.name} ${it.host}:${it.port}")
+            sb.appendLine("myName=${PeerIdentity.myName} myClass=${PeerIdentity.myClassId}")
+            val allPeers = PeerRegistry.all()
+            val sameClass = allPeers.filter { it.classId == PeerIdentity.myClassId }
+            sb.appendLine("peers=${allPeers.size} (sameClass=${sameClass.size})")
+            allPeers.sortedBy { it.name }.forEach {
+                val marker = if (it.classId == PeerIdentity.myClassId) "*" else " "
+                sb.appendLine("  $marker ${it.name} cls=${it.classId ?: "?"} ${it.host}:${it.port}")
             }
             sb.appendLine("allowedPackages(${ClassWatcherService.allowedPackages.size})=" +
                 ClassWatcherService.allowedPackages.sorted().joinToString(","))
@@ -289,13 +292,22 @@ class AgentWebSocketServer(
 
     /**
      * Verify a signed gossip payload against the sender's mDNS-advertised pubkey.
-     * Drops the message on any failure: unknown peer, missing pubkey, bad sig.
-     * Called for P2P_USAGE and P2P_DOMAIN only.
+     * Drops the message on any failure: unknown peer, cross-class, missing pubkey,
+     * bad sig. Called for P2P_USAGE and P2P_DOMAIN only.
      */
     private fun verifyPeerSignature(sender: String, payload: String, sigB64: String): Boolean {
-        val pubkey = PeerRegistry.get(sender)?.publicKeyB64
-        if (pubkey == null) {
+        val peer = PeerRegistry.get(sender)
+        if (peer == null) {
             android.util.Log.w("Gossip", "unknown peer $sender — drop")
+            return false
+        }
+        val myClass = PeerIdentity.myClassId
+        if (myClass.isEmpty() || peer.classId != myClass) {
+            android.util.Log.w("Gossip", "cross-class or unset ($sender cls=${peer.classId}) — drop")
+            return false
+        }
+        val pubkey = peer.publicKeyB64 ?: run {
+            android.util.Log.w("Gossip", "no pubkey for $sender — drop")
             return false
         }
         val ok = PeerIdentity.verify(pubkey, payload.toByteArray(), sigB64)

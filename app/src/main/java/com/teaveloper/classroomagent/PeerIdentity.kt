@@ -37,6 +37,13 @@ object PeerIdentity {
     /** Own mDNS serviceName (deviceName). Signed into gossip payloads so peers know who sent them. */
     @Volatile var myName: String = ""
 
+    /**
+     * Class identifier extracted from myName (first 3 chars = grade + zero-padded class).
+     * Used to isolate consensus per-class so multiple classes on the same Wi-Fi don't
+     * cross-contaminate each other's allowlists. Empty until deviceName is set.
+     */
+    val myClassId: String get() = if (myName.length >= 3) myName.take(3) else ""
+
     fun init(@Suppress("UNUSED_PARAMETER") context: Context) {
         val ks = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         if (!ks.containsAlias(KEY_ALIAS)) {

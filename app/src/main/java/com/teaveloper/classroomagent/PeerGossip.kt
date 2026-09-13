@@ -61,7 +61,12 @@ object PeerGossip {
     }
 
     private fun broadcastToPeers(msg: String) {
-        val peers = PeerRegistry.all()
+        // Only gossip within our own class — different classes on the same
+        // Wi-Fi must not cross-contaminate consensus. If we haven't set a
+        // class id yet (fresh install pre-setup), skip gossip entirely.
+        val myClass = PeerIdentity.myClassId
+        if (myClass.isEmpty()) return
+        val peers = PeerRegistry.inClass(myClass)
         if (peers.isEmpty()) return
         executor.submit {
             for (peer in peers) {
