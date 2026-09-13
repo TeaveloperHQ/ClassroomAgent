@@ -17,7 +17,9 @@ class OverlayService : Service() {
     private var webSocketServer: AgentWebSocketServer? = null
     private var nsdManager: android.net.nsd.NsdManager? = null
     private var nsdListener: android.net.nsd.NsdManager.RegistrationListener? = null
+    private var discoveryListener: android.net.nsd.NsdManager.DiscoveryListener? = null
     private var pendingReregister = false
+    private var ownServiceName: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -25,6 +27,7 @@ class OverlayService : Service() {
         loadAllowedApps()
         startWebSocketServer()
         registerMdns()
+        discoverPeers()
     }
 
     private fun loadAllowedApps() {
@@ -79,6 +82,7 @@ class OverlayService : Service() {
             ?: android.os.Build.MODEL
 
         android.util.Log.d("mDNS", "기기 이름: $deviceName")
+        ownServiceName = deviceName
 
         if (nsdManager == null) {
             nsdManager = getSystemService(NSD_SERVICE) as android.net.nsd.NsdManager
@@ -114,6 +118,62 @@ class OverlayService : Service() {
         nsdManager?.registerService(serviceInfo, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, nsdListener!!)
     }
 
+    /**
+     * Discover other classroom agents on the LAN via mDNS and populate
+     * PeerRegistry. Own advertisement is filtered out by serviceName match.
+     */
+    private fun discoverPeers() {
+        if (nsdManager == null) {
+            nsdManager = getSystemService(NSD_SERVICE) as android.net.nsd.NsdManager
+        }
+        val mgr = nsdManager ?: return
+
+        val resolveListener = object : android.net.nsd.NsdManager.ResolveListener {
+            override fun onResolveFailed(info: android.net.nsd.NsdServiceInfo, code: Int) {
+                android.util.Log.w("Peer", "resolve 실패 ${info.serviceName}: $code")
+            }
+            override fun onServiceResolved(info: android.net.nsd.NsdServiceInfo) {
+                val host = info.host?.hostAddress ?: return
+                PeerRegistry.upsert(info.serviceName, host, info.port)
+                android.util.Log.d("Peer", "발견: ${info.serviceName} @ $host:${info.port} (총 ${PeerRegistry.size()})")
+            }
+        }
+
+        discoveryListener = object : android.net.nsd.NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(serviceType: String) {
+                android.util.Log.d("Peer", "discovery 시작: $serviceType")
+            }
+            override fun onDiscoveryStopped(serviceType: String) {
+                android.util.Log.d("Peer", "discovery 중지")
+            }
+            override fun onStartDiscoveryFailed(serviceType: String, code: Int) {
+                android.util.Log.e("Peer", "discovery 시작 실패: $code")
+            }
+            override fun onStopDiscoveryFailed(serviceType: String, code: Int) {
+                android.util.Log.e("Peer", "discovery 중지 실패: $code")
+            }
+            override fun onServiceFound(info: android.net.nsd.NsdServiceInfo) {
+                if (info.serviceName == ownServiceName) return
+                // Each resolve requires its own listener instance per NsdManager contract.
+                mgr.resolveService(info, resolveListener)
+            }
+            override fun onServiceLost(info: android.net.nsd.NsdServiceInfo) {
+                PeerRegistry.remove(info.serviceName)
+                android.util.Log.d("Peer", "소실: ${info.serviceName} (남은 ${PeerRegistry.size()})")
+            }
+        }
+
+        try {
+            mgr.discoverServices(
+                "_classroomagent._tcp.",
+                android.net.nsd.NsdManager.PROTOCOL_DNS_SD,
+                discoveryListener!!
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("Peer", "discovery 시작 예외: ${e.message}")
+        }
+    }
+
     private fun reregisterMdns() {
         val mgr = nsdManager
         val listener = nsdListener
@@ -141,6 +201,12 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
+        } catch (e: Exception) {
+            android.util.Log.w("Peer", "discovery 정리 실패: ${e.message}")
+        }
+        PeerRegistry.clear()
         webSocketServer?.stop()
         super.onDestroy()
     }
