@@ -34,6 +34,9 @@ object PeerIdentity {
     private var privateKey: PrivateKey? = null
     private var publicKey: PublicKey? = null
 
+    /** Own mDNS serviceName (deviceName). Signed into gossip payloads so peers know who sent them. */
+    @Volatile var myName: String = ""
+
     fun init(@Suppress("UNUSED_PARAMETER") context: Context) {
         val ks = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         if (!ks.containsAlias(KEY_ALIAS)) {

@@ -110,6 +110,18 @@ class AgentWebSocketServer(
             return
         }
 
+        if (command.startsWith("P2P_USAGE|")) {
+            val parts = command.split("|")
+            if (parts.size >= 4) {
+                val pkg = parts[1]
+                val ts = parts[2]
+                val sender = parts[3]
+                android.util.Log.d("Gossip", "peer $sender used $pkg @ $ts")
+                // Slice 4 will feed this into a sliding-window aggregator.
+            }
+            return
+        }
+
         if (command.startsWith("SET_ALLOWED_APPS")) {
             val parts = command.split("|")
             val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()

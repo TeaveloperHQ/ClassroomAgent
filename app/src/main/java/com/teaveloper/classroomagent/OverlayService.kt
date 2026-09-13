@@ -84,6 +84,7 @@ class OverlayService : Service() {
 
         android.util.Log.d("mDNS", "기기 이름: $deviceName")
         ownServiceName = deviceName
+        PeerIdentity.myName = deviceName
 
         if (nsdManager == null) {
             nsdManager = getSystemService(NSD_SERVICE) as android.net.nsd.NsdManager
@@ -213,6 +214,7 @@ class OverlayService : Service() {
         } catch (e: Exception) {
             android.util.Log.w("Peer", "discovery 정리 실패: ${e.message}")
         }
+        PeerGossip.shutdown()
         PeerRegistry.clear()
         webSocketServer?.stop()
         super.onDestroy()

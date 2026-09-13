@@ -69,6 +69,8 @@ class ClassWatcherService : AccessibilityService() {
         // inside the WebSocket server.
         if (pkg !in systemUiPackages) {
             AgentWebSocketServer.instance?.broadcastUsage(pkg)
+            // Also gossip to peer agents for the controller-less consensus path.
+            PeerGossip.sendUsageEvent(pkg)
         }
 
         val currentSuspicious = suspiciousPackage

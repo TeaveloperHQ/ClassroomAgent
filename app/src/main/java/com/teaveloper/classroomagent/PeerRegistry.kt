@@ -31,6 +31,8 @@ object PeerRegistry {
         peers.remove(name)
     }
 
+    fun get(name: String): Peer? = peers[name]
+
     fun all(): List<Peer> = peers.values.toList()
 
     fun size(): Int = peers.size
