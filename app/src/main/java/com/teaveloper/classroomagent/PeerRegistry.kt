@@ -17,13 +17,14 @@ object PeerRegistry {
         val name: String,
         val host: String,
         val port: Int,
+        val publicKeyB64: String?,
         val lastSeenMs: Long
     )
 
     private val peers = ConcurrentHashMap<String, Peer>()
 
-    fun upsert(name: String, host: String, port: Int) {
-        peers[name] = Peer(name, host, port, System.currentTimeMillis())
+    fun upsert(name: String, host: String, port: Int, publicKeyB64: String?) {
+        peers[name] = Peer(name, host, port, publicKeyB64, System.currentTimeMillis())
     }
 
     fun remove(name: String) {

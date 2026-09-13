@@ -24,6 +24,7 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         startForeground(1, createNotification())
+        PeerIdentity.init(this)
         loadAllowedApps()
         startWebSocketServer()
         registerMdns()
@@ -92,6 +93,8 @@ class OverlayService : Service() {
             serviceName = deviceName
             serviceType = "_classroomagent._tcp."
             port = 8080
+            // Advertise our signing pubkey so peers can verify our gossip.
+            setAttribute("pk", PeerIdentity.publicKeyB64())
         }
 
         nsdListener = object : android.net.nsd.NsdManager.RegistrationListener {
@@ -134,8 +137,12 @@ class OverlayService : Service() {
             }
             override fun onServiceResolved(info: android.net.nsd.NsdServiceInfo) {
                 val host = info.host?.hostAddress ?: return
-                PeerRegistry.upsert(info.serviceName, host, info.port)
-                android.util.Log.d("Peer", "발견: ${info.serviceName} @ $host:${info.port} (총 ${PeerRegistry.size()})")
+                val pk = info.attributes?.get("pk")?.let { String(it, Charsets.UTF_8) }
+                PeerRegistry.upsert(info.serviceName, host, info.port, pk)
+                android.util.Log.d(
+                    "Peer",
+                    "발견: ${info.serviceName} @ $host:${info.port} pk=${pk?.take(12)}… (총 ${PeerRegistry.size()})"
+                )
             }
         }
 
