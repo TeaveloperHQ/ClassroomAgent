@@ -114,10 +114,10 @@ class AgentWebSocketServer(
             val parts = command.split("|")
             if (parts.size >= 4) {
                 val pkg = parts[1]
-                val ts = parts[2]
+                val ts = parts[2].toLongOrNull() ?: System.currentTimeMillis()
                 val sender = parts[3]
+                UsageAggregator.record(pkg, sender, ts)
                 android.util.Log.d("Gossip", "peer $sender used $pkg @ $ts")
-                // Slice 4 will feed this into a sliding-window aggregator.
             }
             return
         }

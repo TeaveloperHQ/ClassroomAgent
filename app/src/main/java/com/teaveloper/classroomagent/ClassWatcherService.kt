@@ -64,13 +64,14 @@ class ClassWatcherService : AccessibilityService() {
 
         if (!isClassInSession) return
 
-        // Report every switch to connected teachers so the aggregation layer can
-        // build a class-wide picture of what's actually being used. Dedup happens
-        // inside the WebSocket server.
+        // Report every switch — to connected teachers (Slice 1), to peer agents
+        // (Slice 3), and to our own local aggregator (Slice 4). Self counts as a
+        // peer so a class where everyone naturally uses X converges without any
+        // outside coordination.
         if (pkg !in systemUiPackages) {
             AgentWebSocketServer.instance?.broadcastUsage(pkg)
-            // Also gossip to peer agents for the controller-less consensus path.
             PeerGossip.sendUsageEvent(pkg)
+            UsageAggregator.record(pkg, PeerIdentity.myName, System.currentTimeMillis())
         }
 
         val currentSuspicious = suspiciousPackage
@@ -88,24 +89,21 @@ class ClassWatcherService : AccessibilityService() {
             }
         }
 
+        // Slice 5: soft enforcement.
+        // - Allowed apps: hide overlay silently.
+        // - Everything else: show an advisory overlay but do NOT forcibly redirect.
+        //   The aggregator promotes widely-used apps into allowedPackages, so the
+        //   warning disappears once the class converges on X.
+        // Hard block (force-back + relaunch) is intentionally removed — teacher
+        // override remains available for the exceptional case (later slice).
         if (pkg in allowedPackages) {
             startService(Intent(this, OverlayService::class.java).apply {
                 action = "HIDE"
             })
-        } else {
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            val intent = packageManager.getLaunchIntentForPackage("com.microsoft.office.onenote")
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                startActivity(intent)
-            }
-
-            if (pkg in allowedPackages || pkg in systemUiPackages) {
-                android.util.Log.d("ClassWatcher", "우회 시도 제외 (시스템UI): $pkg")
-                return
-            }
+        } else if (pkg !in systemUiPackages) {
+            startService(Intent(this, OverlayService::class.java).apply {
+                action = "SHOW"
+            })
             val count = violationCount.getOrDefault(pkg, 0) + 1
             violationCount[pkg] = count
             if (count >= 10) {
