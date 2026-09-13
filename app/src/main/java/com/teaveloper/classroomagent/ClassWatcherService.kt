@@ -46,12 +46,14 @@ class ClassWatcherService : AccessibilityService() {
             "com.sec.android.app.launcher"
         )
 
+        @Volatile
         var allowedPackages: MutableSet<String> = DEFAULT_ALLOWED_PACKAGES.toMutableSet()
         /**
          * Teacher-mandated hard block. Overrides consensus: even if 100% of the
          * class uses X, if it's in deniedPackages the agent still force-redirects.
          * Populated only via SET_DENIED_APPS from an authenticated teacher.
          */
+        @Volatile
         var deniedPackages: MutableSet<String> = mutableSetOf()
         var violationCount: MutableMap<String, Int> = mutableMapOf()
         var suspiciousPackage: String? = null
