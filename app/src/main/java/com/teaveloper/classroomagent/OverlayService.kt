@@ -58,6 +58,10 @@ class OverlayService : Service() {
                 trimmedCommand == "STOP" -> {
                     ClassWatcherService.isClassInSession = false
                     ClassWatcherService.classStartedAtMs = 0L
+                    // Ensure banner isn't left over the student's screen after class.
+                    startService(Intent(this, OverlayService::class.java).apply {
+                        action = "HIDE"
+                    })
                 }
                 trimmedCommand == "EDIT_APPROVED" -> {
                     sendBroadcast(Intent("com.teaveloper.classroomagent.EDIT_APPROVED"))
