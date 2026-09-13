@@ -72,6 +72,7 @@ object UsageAggregator {
                 "Aggregator",
                 "$pkg 합의로 승격 ($active/${PeerRegistry.size() + 1} peers, threshold=$threshold)"
             )
+            EventLog.record("PROMOTE", "$pkg ($active/$threshold)")
         }
     }
 
@@ -89,6 +90,7 @@ object UsageAggregator {
             ClassWatcherService.allowedPackages =
                 (ClassWatcherService.allowedPackages - pkg).toMutableSet()
             android.util.Log.d("Aggregator", "$pkg 합의 만료로 강등")
+            EventLog.record("DEMOTE", pkg)
         }
     }
 

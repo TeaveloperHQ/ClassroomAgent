@@ -126,6 +126,8 @@ class AgentWebSocketServer(
                 LocalVpnService.allowedDomains.sorted().joinToString(","))
             sb.appendLine("deniedDomains(${LocalVpnService.deniedDomains.size})=" +
                 LocalVpnService.deniedDomains.sorted().joinToString(","))
+            sb.appendLine("recent events:")
+            EventLog.recent(20).forEach { sb.appendLine("  $it") }
             sb.append("== END ==")
             conn.send(sb.toString())
             return

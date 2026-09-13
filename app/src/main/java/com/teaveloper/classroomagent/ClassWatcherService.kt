@@ -131,6 +131,7 @@ class ClassWatcherService : AccessibilityService() {
                     suspiciousPackage = pkg
                     suspiciousTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
                     consecutiveNonSuspicious = 0
+                    EventLog.record("DENIED_REPEAT", pkg)
                 }
             }
             pkg in allowedPackages -> {
