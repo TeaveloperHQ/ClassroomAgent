@@ -80,11 +80,16 @@ class LocalVpnService : VpnService() {
 
             val domain = extractDomain(packet, length)
             if (domain != null) {
-                // Observe every DNS query — gossip to peers + local aggregator.
-                // Rate limiting (30s per domain) lives in PeerGossip so DNS bursts
-                // don't flood the network.
-                DomainUsageAggregator.record(domain, PeerIdentity.myName, System.currentTimeMillis())
-                PeerGossip.sendDomainEvent(domain)
+                // Observe only during class — outside of session we still filter,
+                // but don't feed the consensus. Reasons for the gate:
+                //   1. Aggregation between classes is noise (kids on breaks).
+                //   2. Peer gossip between classes wastes battery.
+                if (ClassWatcherService.isClassInSession) {
+                    DomainUsageAggregator.record(
+                        domain, PeerIdentity.myName, System.currentTimeMillis()
+                    )
+                    PeerGossip.sendDomainEvent(domain)
+                }
 
                 if (isAllowed(domain)) {
                     Log.d("VpnService", "DNS 전달 시작: $domain")
