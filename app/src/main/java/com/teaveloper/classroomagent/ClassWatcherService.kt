@@ -2,6 +2,7 @@ package com.teaveloper.classroomagent
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import java.text.SimpleDateFormat
@@ -45,6 +46,11 @@ class ClassWatcherService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        // Load persisted allowlist (teacher-pushed via SET_ALLOWED_APPS). Union with defaults
+        // so system UI / IME / launcher stay allowed regardless of what the teacher sent.
+        val persisted = getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+            .getStringSet("allowed_apps", emptySet()) ?: emptySet()
+        allowedPackages = (DEFAULT_ALLOWED_PACKAGES + persisted).toMutableSet()
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -57,6 +63,13 @@ class ClassWatcherService : AccessibilityService() {
         android.util.Log.d("ClassWatcher", "현재 앱: $pkg")
 
         if (!isClassInSession) return
+
+        // Report every switch to connected teachers so the aggregation layer can
+        // build a class-wide picture of what's actually being used. Dedup happens
+        // inside the WebSocket server.
+        if (pkg !in systemUiPackages) {
+            AgentWebSocketServer.instance?.broadcastUsage(pkg)
+        }
 
         val currentSuspicious = suspiciousPackage
         if (currentSuspicious != null) {

@@ -20,6 +20,33 @@ class AgentWebSocketServer(
 
     companion object {
         var editRequested = false
+        @Volatile var instance: AgentWebSocketServer? = null
+        private const val USAGE_DEDUPE_WINDOW_MS = 3000L
+    }
+
+    private var lastUsagePkg: String? = null
+    private var lastUsageAt: Long = 0L
+
+    override fun onStart() {
+        instance = this
+        android.util.Log.d("WebSocket", "서버 시작됨 - 주소: ${this.address}")
+    }
+
+    /**
+     * Broadcast app usage observation to all connected teachers.
+     * Same pkg within USAGE_DEDUPE_WINDOW_MS is skipped to avoid flooding when
+     * accessibility fires TYPE_WINDOW_STATE_CHANGED repeatedly for the same app.
+     */
+    fun broadcastUsage(pkg: String) {
+        val now = System.currentTimeMillis()
+        if (pkg == lastUsagePkg && now - lastUsageAt < USAGE_DEDUPE_WINDOW_MS) return
+        lastUsagePkg = pkg
+        lastUsageAt = now
+        try {
+            broadcast("USAGE|$pkg|$now")
+        } catch (e: Exception) {
+            android.util.Log.w("WebSocket", "broadcastUsage 실패: ${e.message}")
+        }
     }
 
     override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
@@ -83,6 +110,20 @@ class AgentWebSocketServer(
             return
         }
 
+        if (command.startsWith("SET_ALLOWED_APPS")) {
+            val parts = command.split("|")
+            val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
+            android.util.Log.d("Allowlist", "SET_ALLOWED_APPS 수신: ${apps.size}개")
+            // Merge with defaults so system UI / IME / launcher are never blocked
+            ClassWatcherService.allowedPackages = (ClassWatcherService.DEFAULT_ALLOWED_PACKAGES + apps).toMutableSet()
+            context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putStringSet("allowed_apps", apps)
+                .apply()
+            conn.send("OK|SET_ALLOWED_APPS|${apps.size}")
+            return
+        }
+
         if (command.startsWith("SET_ALLOWED_SITES")) {
             android.util.Log.d("VpnService", "SET_ALLOWED_SITES 수신: $command")
             val parts = command.split("|")
@@ -130,10 +171,6 @@ class AgentWebSocketServer(
 
     override fun onError(conn: WebSocket?, ex: Exception) {
         android.util.Log.e("WebSocket", "에러: ${ex.message}")
-    }
-
-    override fun onStart() {
-        android.util.Log.d("WebSocket", "서버 시작됨 - 주소: ${this.address}")
     }
 
     private fun isAccessibilityEnabled(): Boolean {
