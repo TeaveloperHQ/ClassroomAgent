@@ -25,6 +25,7 @@ class OverlayService : Service() {
         super.onCreate()
         startForeground(1, createNotification())
         PeerIdentity.init(this)
+        BehaviorHistory.init(this)
         loadAllowedApps()
         startWebSocketServer()
         registerMdns()
@@ -54,11 +55,28 @@ class OverlayService : Service() {
                 trimmedCommand == "START" -> {
                     ClassWatcherService.isClassInSession = true
                     ClassWatcherService.classStartedAtMs = System.currentTimeMillis()
+                    // Preload apps this student regularly uses at this day-of-week +
+                    // hour slot. This is the "신속성" path — skip waiting for
+                    // consensus for things we already know are normal-for-this-time.
+                    val regular = BehaviorHistory.regularForNow()
+                    if (regular.isNotEmpty()) {
+                        ClassWatcherService.allowedPackages =
+                            (ClassWatcherService.allowedPackages + regular).toMutableSet()
+                        EventLog.record("HISTORY_PRELOAD", regular.joinToString(","))
+                    }
+                    ClassWatcherService.sessionUsedPackages.clear()
                 }
                 trimmedCommand == "STOP" -> {
+                    // Every pkg the student positively used this session becomes a
+                    // point of evidence for its slot going forward. After enough
+                    // sessions the pkg auto-unlocks at start rather than waiting
+                    // on consensus.
+                    ClassWatcherService.sessionUsedPackages.forEach {
+                        BehaviorHistory.recordPositive(it)
+                    }
+                    ClassWatcherService.sessionUsedPackages.clear()
                     ClassWatcherService.isClassInSession = false
                     ClassWatcherService.classStartedAtMs = 0L
-                    // Ensure banner isn't left over the student's screen after class.
                     startService(Intent(this, OverlayService::class.java).apply {
                         action = "HIDE"
                     })

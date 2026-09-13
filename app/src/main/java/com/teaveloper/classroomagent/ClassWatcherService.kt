@@ -58,6 +58,13 @@ class ClassWatcherService : AccessibilityService() {
         var violationCount: MutableMap<String, Int> = mutableMapOf()
         var suspiciousPackage: String? = null
         var suspiciousTime: String? = null
+
+        /**
+         * Distinct pkgs used positively during the current session (i.e. hit
+         * the allowedPackages branch or the history fast-path). Persisted to
+         * BehaviorHistory on STOP, then cleared. Populated in enforcement.
+         */
+        val sessionUsedPackages: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     }
 
     override fun onServiceConnected() {
@@ -140,6 +147,19 @@ class ClassWatcherService : AccessibilityService() {
                 startService(Intent(this, OverlayService::class.java).apply {
                     action = "HIDE"
                 })
+                sessionUsedPackages += pkg
+            }
+            BehaviorHistory.isRegular(pkg) -> {
+                // Personal history says this pkg is normal-for-this-time-slot.
+                // Treat as allowed, promote into allowedPackages so DIAG/STATUS
+                // reflect it and the aggregator's decay logic can still remove it
+                // if the student's habit shifts.
+                allowedPackages = (allowedPackages + pkg).toMutableSet()
+                startService(Intent(this, OverlayService::class.java).apply {
+                    action = "HIDE"
+                })
+                sessionUsedPackages += pkg
+                EventLog.record("HISTORY_UNLOCK", pkg)
             }
             pkg !in systemUiPackages -> {
                 val inGrace = classStartedAtMs > 0 &&
