@@ -137,29 +137,15 @@ class AgentWebSocketServer(
 
         if (command == "GET_APPS") {
             try {
-                val allApps = context.packageManager.getInstalledApplications(0)
-                val teamsApp = allApps.find { it.packageName.contains("teams", ignoreCase = true)
-                    || it.packageName.contains("microsoft", ignoreCase = true) }
-                android.util.Log.d("GET_APPS", "Teams 검색 결과: ${teamsApp?.packageName ?: "없음"}")
-
-                val teamsLaunch = teamsApp?.let {
-                    context.packageManager.getLaunchIntentForPackage(it.packageName)
-                }
-                android.util.Log.d("GET_APPS", "Teams launch intent: $teamsLaunch")
-
+                // Enumerate launchable apps via LAUNCHER intent query — matches the
+                // <queries> block in the manifest, no QUERY_ALL_PACKAGES needed.
                 val pm = context.packageManager
-                val method1 = pm.getInstalledApplications(0)
-                    .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
-                    .map { "${pm.getApplicationLabel(it)}:${it.packageName}" }
-
                 val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
-                val method2 = pm.queryIntentActivities(launcherIntent, 0)
+                val result = pm.queryIntentActivities(launcherIntent, 0)
                     .map { "${it.loadLabel(pm)}:${it.activityInfo.packageName}" }
-
-                val result = (method1 + method2)
                     .distinctBy { it.substringAfter(":") }
                     .sortedBy { it.substringBefore(":") }
-                android.util.Log.d("GET_APPS", "Method1: ${method1.size}, Method2: ${method2.size}, 합계: ${result.size}")
+                android.util.Log.d("GET_APPS", "launchable apps: ${result.size}")
                 val response = "APP_LIST|" + result.joinToString("|")
                 conn.send(response)
             } catch (e: Exception) {

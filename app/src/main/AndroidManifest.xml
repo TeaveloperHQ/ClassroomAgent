@@ -7,9 +7,21 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
-
+    <!--
+      Scoped package visibility (Android 11+ R+). Replaces the previously
+      declared QUERY_ALL_PACKAGES broad permission, which is a Play/Portal
+      review red flag. We only need:
+      - launchable-app enumeration for GET_APPS (teacher picks allowed apps)
+      - direct access to OneNote for the force-redirect path in enforcement
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="com.microsoft.office.onenote" />
+    </queries>
 
     <application
         android:allowBackup="true"

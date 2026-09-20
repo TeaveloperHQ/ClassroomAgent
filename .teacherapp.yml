@@ -1,0 +1,22 @@
+stack: android-gradle
+entry: app
+notes: |
+  학교 소유 태블릿에 배포되는 관리자용 에이전트 앱.
+  교사가 수업 중 학생 태블릿에서 허용/금지된 앱과 도메인을 관리하기 위한 시스템 도구.
+
+  통신 범위: 학교 LAN 내부 P2P 만 사용 (mDNS discovery + 로컬 WebSocket).
+  외부 서버로의 데이터 전송 없음. 학생 개인 식별 정보 수집·저장·전송 없음.
+  관측 데이터는 로컬 인메모리 10분 슬라이딩 윈도우와 SharedPreferences 의 사용 이력 카운터만 사용.
+
+  필수 권한 및 사용 근거:
+    - BIND_ACCESSIBILITY_SERVICE: 수업 중 학생이 여는 앱을 감지하여 교사가 지정한 금지 앱을 소프트/하드 차단
+    - BIND_VPN_SERVICE: 로컬 DNS 훅으로 교사가 지정한 금지 도메인을 차단 (외부 전송 없이 로컬 drop)
+    - SYSTEM_ALERT_WINDOW: 금지 앱 진입 시 상단 안내 배너 표시
+    - FOREGROUND_SERVICE / FOREGROUND_SERVICE_REMOTE_MESSAGING: 백그라운드에서 교사 WebSocket 명령 수신
+    - RECEIVE_BOOT_COMPLETED: 재부팅 후 자동 재시작
+    - INTERNET / ACCESS_NETWORK_STATE: LAN 통신용 (외부 도메인 접속 없음)
+
+  QUERY_ALL_PACKAGES 는 사용하지 않으며 <queries> 로 LAUNCHER 인텐트와 OneNote 패키지 접근만 명시.
+
+  배포 방식: 팩토리 리셋 없이 학교 IT 관리자가 태블릿에 사이드로드 후 교사 계정으로 등록.
+  학생이 접근성/오버레이/VPN 권한을 수동 승인해야 동작 (안드로이드 정책상 강제 부여 불가).
