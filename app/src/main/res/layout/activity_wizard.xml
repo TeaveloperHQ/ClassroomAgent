@@ -63,13 +63,18 @@
             android:orientation="vertical"
             android:gravity="center">
 
-            <ImageView
-                android:id="@+id/wizardIllustration"
+            <FrameLayout
                 android:layout_width="160dp"
                 android:layout_height="160dp"
-                android:src="@drawable/bg_brand_badge"
-                android:padding="40dp"
-                android:contentDescription="step illustration" />
+                android:background="@drawable/bg_brand_badge">
+                <ImageView
+                    android:id="@+id/wizardIllustration"
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_launcher_foreground"
+                    android:contentDescription="step illustration" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/wizardTitle"

@@ -50,7 +50,7 @@ class AgentService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Classroom Agent")
             .setContentText("Running in background")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .build()
     }
 }

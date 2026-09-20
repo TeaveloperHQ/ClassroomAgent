@@ -274,7 +274,7 @@ class OverlayService : Service() {
         return Notification.Builder(this, channelId)
             .setContentTitle("수업 모드")
             .setContentText("수업 관리 서비스 실행 중")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .build()
     }
 
