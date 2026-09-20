@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
 import android.view.accessibility.AccessibilityManager
@@ -93,20 +92,20 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 권한 부여는 매뉴얼(docs/SETUP.md)에서 안내한다. 앱은 상태만 확인하고
+        // 미완이면 사용자에게 매뉴얼을 참조하라는 안내만 표시.
         val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
         val accessibilityEnabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { it.resolveInfo.serviceInfo.packageName == packageName }
         val overlayGranted = Settings.canDrawOverlays(this)
-        val pm = getSystemService(POWER_SERVICE) as PowerManager
-        val batteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val vpnGranted = VpnService.prepare(this) == null
 
-        // 하나라도 미완이면 전용 마법사로 위임 — 초보자가 안심하고 끝까지 따라오도록
-        // 풀스크린 4스텝 UI + 자동 폴링 + 접근성 auto-tap 조합.
-        if (!accessibilityEnabled || !overlayGranted || !batteryExempt || !vpnGranted) {
-            startActivity(Intent(this, WizardActivity::class.java))
-        } else {
-            ClassWatcherService.autoGrantPending = false
+        if (!accessibilityEnabled || !overlayGranted || !vpnGranted) {
+            Toast.makeText(
+                this,
+                "권한 설정이 아직입니다. 배포 매뉴얼을 참고해 접근성·오버레이·VPN 을 켜주세요.",
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 

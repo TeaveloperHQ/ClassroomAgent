@@ -4,9 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
-import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -14,7 +12,6 @@ import java.util.Locale
 class ClassWatcherService : AccessibilityService() {
 
     private var consecutiveNonSuspicious = 0
-    private val guidance by lazy { GuidanceOverlay(this) }
 
     private val systemUiPackages = setOf(
         "com.android.systemui",
@@ -28,31 +25,6 @@ class ClassWatcherService : AccessibilityService() {
     companion object {
         var instance: ClassWatcherService? = null
         var isClassInSession = false
-        /**
-         * 최초 설정 마법사(WizardActivity)가 켜두는 스위치. true 인 동안 이
-         * 서비스는 VPN 컨센트 다이얼로그(오직 그것 하나) 의 '확인' 버튼을 탭해
-         * 준다. 다른 시스템 화면에는 절대 손대지 않음 — 사용자가 마법사 안내를
-         * 따라 직접 스위치를 눌러 승인한다. 마법사 완료 시 false 로 리셋.
-         */
-        @Volatile var autoGrantPending = false
-
-        // VPN 컨센트 다이얼로그만 대상. 오버레이/배터리 등 일반 설정 화면은
-        // 사용자가 마법사의 안내대로 직접 탭한다.
-        private val VPN_DIALOG_PACKAGES = setOf(
-            "com.android.vpndialogs",
-            "com.samsung.android.vpndialogs",
-        )
-        private val VPN_CONFIRM_LABELS = listOf("확인", "OK", "Allow", "허용")
-
-        // 오버레이 안내(터치 안 함, 시각적 표시만) 를 그릴 대상 화면.
-        private val GUIDANCE_PACKAGES = setOf(
-            "com.android.settings",
-            "com.samsung.android.settings",
-            "com.android.vpndialogs",
-            "com.samsung.android.vpndialogs",
-            "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-        )
         /**
          * Epoch ms of the last START. During the grace period after START,
          * pending-app banners are suppressed — students shouldn't get scolded
@@ -116,31 +88,15 @@ class ClassWatcherService : AccessibilityService() {
             deniedPackages = (prefs.getStringSet("denied_apps", emptySet()) ?: emptySet()).toMutableSet()
         }
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
         android.util.Log.d("ClassWatcher", "현재 앱: $pkg")
-
-        // 최초 세팅 중 VPN 컨센트 다이얼로그만 자동 확인 (초보자에게 가장
-        // 혼란스러운 다이얼로그 하나). 다른 시스템 화면은 손대지 않음.
-        if (autoGrantPending && pkg in VPN_DIALOG_PACKAGES) {
-            tryConfirmVpnDialog()
-        }
-        // 마법사 진행 중이면 시스템 설정/다이얼로그 위에 "여기 눌러주세요"
-        // 화살표 안내를 그린다. 자동으로 누르진 않고 시각적으로만 지시.
-        if (autoGrantPending) {
-            if (pkg in GUIDANCE_PACKAGES) updateGuidance()
-            else guidance.hide()
-        } else {
-            guidance.hide()
-        }
 
         if (!isClassInSession) return
 
@@ -246,92 +202,7 @@ class ClassWatcherService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        guidance.hide()
         instance = null
         super.onDestroy()
-    }
-
-    /**
-     * 시스템 설정/다이얼로그 화면에서 사용자가 정확히 눌러야 할 위젯을 찾아
-     * 그 좌표 위에 화살표+힌트 오버레이를 그린다. 실제 탭은 사용자가 함.
-     */
-    private fun updateGuidance() {
-        val root = rootInActiveWindow ?: run { guidance.hide(); return }
-
-        // 우선순위: (1) 미체크 스위치 — 오버레이/접근성 설정 페이지
-        //          (2) '허용' 버튼 — 배터리 최적화 다이얼로그
-        //          (3) '확인' 버튼 — VPN 컨센트 다이얼로그
-        val switch = findFirstNode(root) { n ->
-            val cn = n.className?.toString() ?: return@findFirstNode false
-            (cn == "android.widget.Switch" ||
-                cn.endsWith(".SwitchCompat") ||
-                cn.contains("SeslSwitchBar")
-            ) && n.isCheckable && !n.isChecked && n.isEnabled
-        }
-        if (switch != null) {
-            val r = Rect().also { switch.getBoundsInScreen(it) }
-            if (!r.isEmpty) {
-                guidance.show(r, "이 스위치를 켜주세요")
-                return
-            }
-        }
-
-        for (label in listOf("허용", "확인", "Allow", "OK")) {
-            val node = root.findAccessibilityNodeInfosByText(label)?.firstOrNull() ?: continue
-            val clickable = findClickableAncestor(node) ?: node
-            val r = Rect().also { clickable.getBoundsInScreen(it) }
-            if (!r.isEmpty) {
-                guidance.show(r, "'$label' 을 눌러주세요")
-                return
-            }
-        }
-        guidance.hide()
-    }
-
-    private fun findClickableAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        var current: AccessibilityNodeInfo? = node
-        while (current != null) {
-            if (current.isClickable) return current
-            current = current.parent
-        }
-        return null
-    }
-
-    private fun findFirstNode(
-        root: AccessibilityNodeInfo,
-        predicate: (AccessibilityNodeInfo) -> Boolean
-    ): AccessibilityNodeInfo? {
-        if (predicate(root)) return root
-        for (i in 0 until root.childCount) {
-            val child = root.getChild(i) ?: continue
-            findFirstNode(child, predicate)?.let { return it }
-        }
-        return null
-    }
-
-    /**
-     * VPN 컨센트 다이얼로그의 "확인" 버튼만 탭한다. 이 다이얼로그는 우리 앱이
-     * VpnService.prepare() 를 호출했을 때만 Android 가 띄워준다 — 즉 언제
-     * 어떤 화면이 뜰지를 우리가 명시적으로 트리거한 결과. 사용자의 예상 밖
-     * 화면을 조작하는 게 아니라 자기 앱 요청에 동의하는 셈.
-     *
-     * adb logcat -s AutoGrant 로 동작 확인 가능.
-     */
-    private fun tryConfirmVpnDialog() {
-        val root = rootInActiveWindow ?: return
-        for (label in VPN_CONFIRM_LABELS) {
-            val nodes = root.findAccessibilityNodeInfosByText(label) ?: continue
-            for (n in nodes) {
-                var current: AccessibilityNodeInfo? = n
-                while (current != null) {
-                    if (current.isClickable && current.isEnabled) {
-                        current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        android.util.Log.d("AutoGrant", "VPN 확인 탭: '$label'")
-                        return
-                    }
-                    current = current.parent
-                }
-            }
-        }
     }
 }

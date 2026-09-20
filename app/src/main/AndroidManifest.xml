@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!--
       Scoped package visibility (Android 11+ R+). Replaces the previously
@@ -44,11 +43,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".WizardActivity"
-            android:exported="false"
-            android:launchMode="singleTop"
-            android:theme="@style/Theme.ClassroomAgent" />
         <service
             android:name=".AgentService"
             android:exported="false"
