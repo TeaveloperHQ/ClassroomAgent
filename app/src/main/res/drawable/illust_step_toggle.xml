@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Step illustration for switch-toggle screens (accessibility, overlay).
+  Shows a settings-row silhouette with an OFF toggle on the right and an
+  accent-color arrow pointing at the toggle so novice users know exactly
+  what to interact with once they arrive at the system settings page.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+
+    <!-- Card background -->
+    <path
+        android:pathData="M12,32 h136 a8,8 0 0 1 8,8 v80 a8,8 0 0 1 -8,8 h-136 a8,8 0 0 1 -8,-8 v-80 a8,8 0 0 1 8,-8 z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Header bar -->
+    <path
+        android:pathData="M12,32 h136 a8,8 0 0 1 8,8 v12 h-152 v-12 a8,8 0 0 1 8,-8 z"
+        android:fillColor="#EEF2FF" />
+
+    <!-- Row: icon placeholder -->
+    <path
+        android:pathData="M20,74 m-8,0 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0"
+        android:fillColor="#6366F1" />
+
+    <!-- Row: label bar -->
+    <path
+        android:pathData="M40,68 h50 v6 h-50 z M40,80 h30 v4 h-30 z"
+        android:fillColor="#94A3B8" />
+
+    <!-- Toggle (OFF state) -->
+    <path
+        android:pathData="M108,66 h32 a10,10 0 0 1 10,10 a10,10 0 0 1 -10,10 h-32 a10,10 0 0 1 -10,-10 a10,10 0 0 1 10,-10 z"
+        android:fillColor="#CBD5E1" />
+    <path
+        android:pathData="M108,68 m0,8 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Second row (visual density) -->
+    <path
+        android:pathData="M40,108 h50 v5 h-50 z"
+        android:fillColor="#E2E8F0" />
+
+    <!-- Arrow pointing at the toggle -->
+    <path
+        android:pathData="M138,124 L138,100 L128,100 L148,86 L168,100 L158,100 L158,124 Z"
+        android:fillColor="#F59E0B" />
+</vector>
