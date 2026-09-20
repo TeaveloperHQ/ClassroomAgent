@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_brand_badge"
+        android:padding="16dp"
+        android:layout_marginTop="8dp">
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@mipmap/ic_launcher_round"
+            android:contentDescription="ClassroomAgent" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="학교 관리 모드 설정"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:textSize="16sp" />
+            <TextView
+                android:id="@+id/wizardStepIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1 / 4 단계"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/progressDots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="20dp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/wizardIllustration"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:src="@drawable/bg_brand_badge"
+                android:padding="40dp"
+                android:contentDescription="step illustration" />
+
+            <TextView
+                android:id="@+id/wizardTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/teavel_ink"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginTop="28dp"
+                android:text="접근성 서비스 켜기" />
+
+            <TextView
+                android:id="@+id/wizardSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/teavel_ink_muted"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:text="이 단계만 직접 켜주시면 나머지는 자동으로 진행됩니다." />
+
+            <TextView
+                android:id="@+id/wizardPath"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/teavel_accent"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/bg_button_outline"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:layout_marginTop="20dp"
+                android:text="설정 → 접근성 → ClassroomAgent" />
+
+            <ProgressBar
+                android:id="@+id/wizardWaitingSpinner"
+                style="?android:attr/progressBarStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:indeterminateTint="@color/teavel_accent"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/wizardWaitingText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/teavel_ink_muted"
+                android:textSize="14sp"
+                android:layout_marginTop="12dp"
+                android:text="자동으로 처리하는 중..."
+                android:visibility="gone" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <Button
+        android:id="@+id/wizardPrimaryButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="지금 이동"
+        android:textColor="@color/white"
+        android:textSize="17sp"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_button_primary"
+        android:stateListAnimator="@null"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/wizardHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/teavel_ink_muted"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:text="화면 이동 후 돌아오면 자동으로 다음 단계로 진행됩니다"
+        android:layout_marginBottom="8dp" />
+
+</LinearLayout>

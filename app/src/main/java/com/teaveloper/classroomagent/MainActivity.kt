@@ -1,6 +1,5 @@
 package com.teaveloper.classroomagent
 
-import androidx.core.net.toUri
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
@@ -12,10 +11,8 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
-import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
@@ -32,17 +29,6 @@ class MainActivity : AppCompatActivity() {
     private val editRejectedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Toast.makeText(this@MainActivity, "선생님이 학적 수정 요청을 거절했습니다.", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private val vpnPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            Log.d("ClassroomAgent", "VPN 권한 허용됨")
-        } else {
-            Log.w("ClassroomAgent", "VPN 권한 거부됨")
-            Toast.makeText(this, "VPN 권한이 필요합니다. 설정에서 허용해주세요.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -70,7 +56,6 @@ class MainActivity : AppCompatActivity() {
             AgentWebSocketServer.editRequested = true
             Toast.makeText(this, "학적 수정 요청을 전송했습니다", Toast.LENGTH_SHORT).show()
         }
-        // VPN 권한 요청은 checkPermissions() 마법사 체인에서 다룸.
     }
 
     override fun onResume() {
@@ -101,7 +86,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkPermissions() {
         if (activeDialog?.isShowing == true) return
 
-        // 초기 설정이 완료되지 않은 경우 설정 다이얼로그 먼저 표시
+        // 초기 설정(학년/반/번호/이름)이 아직이면 그거부터
         val prefs = getSharedPreferences("setup", MODE_PRIVATE)
         if (prefs.getString("deviceName", null) == null) {
             showSetupDialog()
@@ -116,52 +101,13 @@ class MainActivity : AppCompatActivity() {
         val batteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val vpnGranted = VpnService.prepare(this) == null
 
-        // 접근성이 켜져 있으면 남은 시스템 다이얼로그(오버레이 확인, 배터리 최적화,
-        // VPN 컨센트)는 ClassWatcherService 가 자동으로 탭한다. 사용자는 접근성
-        // 토글 하나만 켜면 되도록 유도.
-        ClassWatcherService.autoGrantPending =
-            accessibilityEnabled && (!overlayGranted || !batteryExempt || !vpnGranted)
-
-        if (!accessibilityEnabled) {
-            showPermissionDialog(
-                title = "접근성 권한 필요",
-                message = "수업 중 앱 전환 감지를 위해 접근성 권한이 필요합니다.\n" +
-                        "이 권한만 켜면 나머지 권한은 자동으로 부여됩니다.\n\n" +
-                        "설정 경로\n" +
-                        "설정 → 접근성 → 설치된 앱 → ClassroomAgent → 사용",
-                onConfirm = {
-                    ClassWatcherService.autoGrantPending = true
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }
-            )
-            return
+        // 하나라도 미완이면 전용 마법사로 위임 — 초보자가 안심하고 끝까지 따라오도록
+        // 풀스크린 4스텝 UI + 자동 폴링 + 접근성 auto-tap 조합.
+        if (!accessibilityEnabled || !overlayGranted || !batteryExempt || !vpnGranted) {
+            startActivity(Intent(this, WizardActivity::class.java))
+        } else {
+            ClassWatcherService.autoGrantPending = false
         }
-
-        if (!overlayGranted) {
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    "package:$packageName".toUri()
-                )
-            )
-            return
-        }
-
-        if (!batteryExempt) {
-            startActivity(
-                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    .setData("package:$packageName".toUri())
-            )
-            return
-        }
-
-        if (!vpnGranted) {
-            VpnService.prepare(this)?.let { vpnPermissionLauncher.launch(it) }
-            return
-        }
-
-        // 모두 완료 — 자동 탭 대기 해제
-        ClassWatcherService.autoGrantPending = false
     }
 
     private fun showSetupDialog(isResetup: Boolean = false) {
@@ -259,16 +205,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showPermissionDialog(title: String, message: String, onConfirm: () -> Unit) {
-        activeDialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("설정하러 가기") { dialog, _ ->
-                dialog.dismiss()
-                activeDialog = null
-                onConfirm()
-            }
-            .setCancelable(false)
-            .show()
-    }
 }
