@@ -205,7 +205,9 @@ class AgentWebSocketServer(
             val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
             android.util.Log.d("Allowlist", "SET_ALLOWED_APPS 수신: ${apps.size}개")
             // Merge with defaults so system UI / IME / launcher are never blocked
-            ClassWatcherService.allowedPackages = (ClassWatcherService.DEFAULT_ALLOWED_PACKAGES + apps).toMutableSet()
+            synchronized(ClassWatcherService.allowlistLock) {
+                ClassWatcherService.allowedPackages = (ClassWatcherService.DEFAULT_ALLOWED_PACKAGES + apps).toMutableSet()
+            }
             // Teacher's list is authoritative — consensus additions dropped, will
             // rebuild organically on next observation.
             UsageAggregator.forgetConsensusPromotions()
@@ -221,7 +223,9 @@ class AgentWebSocketServer(
             val parts = command.split("|")
             val apps = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
             android.util.Log.d("Denylist", "SET_DENIED_APPS 수신: ${apps.size}개")
-            ClassWatcherService.deniedPackages = apps
+            synchronized(ClassWatcherService.allowlistLock) {
+                ClassWatcherService.deniedPackages = apps
+            }
             context.getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
                 .edit()
                 .putStringSet("denied_apps", apps)

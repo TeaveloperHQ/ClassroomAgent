@@ -39,11 +39,15 @@ class OverlayService : Service() {
             prefs.edit()
                 .putString("allowed_apps", ClassWatcherService.DEFAULT_ALLOWED_PACKAGES.joinToString(","))
                 .apply()
-            ClassWatcherService.allowedPackages = ClassWatcherService.DEFAULT_ALLOWED_PACKAGES.toMutableSet()
+            synchronized(ClassWatcherService.allowlistLock) {
+                ClassWatcherService.allowedPackages = ClassWatcherService.DEFAULT_ALLOWED_PACKAGES.toMutableSet()
+            }
         } else {
             val packages = savedApps.split(",").filter { it.isNotBlank() }.toMutableSet()
             packages.addAll(ClassWatcherService.DEFAULT_ALLOWED_PACKAGES)
-            ClassWatcherService.allowedPackages = packages
+            synchronized(ClassWatcherService.allowlistLock) {
+                ClassWatcherService.allowedPackages = packages
+            }
         }
     }
 
@@ -60,8 +64,10 @@ class OverlayService : Service() {
                     // consensus for things we already know are normal-for-this-time.
                     val regular = BehaviorHistory.regularForNow()
                     if (regular.isNotEmpty()) {
-                        ClassWatcherService.allowedPackages =
-                            (ClassWatcherService.allowedPackages + regular).toMutableSet()
+                        synchronized(ClassWatcherService.allowlistLock) {
+                            ClassWatcherService.allowedPackages =
+                                (ClassWatcherService.allowedPackages + regular).toMutableSet()
+                        }
                         EventLog.record("HISTORY_PRELOAD", regular.joinToString(","))
                     }
                     ClassWatcherService.sessionUsedPackages.clear()
@@ -91,7 +97,9 @@ class OverlayService : Service() {
                     val parts = trimmedCommand.split("|")
                     val newPackages = parts.drop(1).filter { it.isNotBlank() }.toMutableSet()
                     newPackages.addAll(ClassWatcherService.DEFAULT_ALLOWED_PACKAGES)
-                    ClassWatcherService.allowedPackages = newPackages
+                    synchronized(ClassWatcherService.allowlistLock) {
+                        ClassWatcherService.allowedPackages = newPackages
+                    }
                     getSharedPreferences("setup", MODE_PRIVATE).edit()
                         .putString("allowed_apps", newPackages.joinToString(","))
                         .apply()

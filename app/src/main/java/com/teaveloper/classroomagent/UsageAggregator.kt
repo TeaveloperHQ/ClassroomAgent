@@ -65,10 +65,18 @@ object UsageAggregator {
     private fun maybePromote(pkg: String) {
         val active = activeCount(pkg)
         val threshold = currentThreshold()
-        if (active >= threshold && pkg !in ClassWatcherService.allowedPackages) {
-            ClassWatcherService.allowedPackages =
-                (ClassWatcherService.allowedPackages + pkg).toMutableSet()
-            consensusPromoted += pkg
+        if (active < threshold) return
+        val promoted = synchronized(ClassWatcherService.allowlistLock) {
+            if (pkg in ClassWatcherService.allowedPackages) {
+                false
+            } else {
+                ClassWatcherService.allowedPackages =
+                    (ClassWatcherService.allowedPackages + pkg).toMutableSet()
+                consensusPromoted += pkg
+                true
+            }
+        }
+        if (promoted) {
             android.util.Log.d(
                 "Aggregator",
                 "$pkg 합의로 승격 ($active/${PeerRegistry.size() + 1} peers, threshold=$threshold)"
@@ -86,10 +94,14 @@ object UsageAggregator {
         val threshold = currentThreshold()
         val toRemove = consensusPromoted.filter { activeCount(it) < threshold }
         if (toRemove.isEmpty()) return
+        synchronized(ClassWatcherService.allowlistLock) {
+            for (pkg in toRemove) {
+                consensusPromoted.remove(pkg)
+                ClassWatcherService.allowedPackages =
+                    (ClassWatcherService.allowedPackages - pkg).toMutableSet()
+            }
+        }
         for (pkg in toRemove) {
-            consensusPromoted.remove(pkg)
-            ClassWatcherService.allowedPackages =
-                (ClassWatcherService.allowedPackages - pkg).toMutableSet()
             android.util.Log.d("Aggregator", "$pkg 합의 만료로 강등")
             EventLog.record("DEMOTE", pkg)
         }

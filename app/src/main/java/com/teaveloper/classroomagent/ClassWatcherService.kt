@@ -46,6 +46,16 @@ class ClassWatcherService : AccessibilityService() {
             "com.sec.android.app.launcher"
         )
 
+        /**
+         * Guards read-modify-write on allowedPackages/deniedPackages. @Volatile
+         * gives visibility of the reference swap but not atomicity of
+         * `set = (set + x).toMutableSet()`; without this lock, a consensus
+         * promotion and a teacher SET_ALLOWED_APPS arriving on different
+         * threads can silently drop one of the writes. Every reassignment of
+         * these two fields must happen inside synchronized(allowlistLock).
+         */
+        val allowlistLock: Any = Any()
+
         @Volatile
         var allowedPackages: MutableSet<String> = DEFAULT_ALLOWED_PACKAGES.toMutableSet()
         /**
@@ -73,8 +83,10 @@ class ClassWatcherService : AccessibilityService() {
         // so system UI / IME / launcher stay allowed regardless of what the teacher sent.
         val prefs = getSharedPreferences("agent_prefs", Context.MODE_PRIVATE)
         val persisted = prefs.getStringSet("allowed_apps", emptySet()) ?: emptySet()
-        allowedPackages = (DEFAULT_ALLOWED_PACKAGES + persisted).toMutableSet()
-        deniedPackages = (prefs.getStringSet("denied_apps", emptySet()) ?: emptySet()).toMutableSet()
+        synchronized(allowlistLock) {
+            allowedPackages = (DEFAULT_ALLOWED_PACKAGES + persisted).toMutableSet()
+            deniedPackages = (prefs.getStringSet("denied_apps", emptySet()) ?: emptySet()).toMutableSet()
+        }
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -154,7 +166,9 @@ class ClassWatcherService : AccessibilityService() {
                 // Treat as allowed, promote into allowedPackages so DIAG/STATUS
                 // reflect it and the aggregator's decay logic can still remove it
                 // if the student's habit shifts.
-                allowedPackages = (allowedPackages + pkg).toMutableSet()
+                synchronized(allowlistLock) {
+                    allowedPackages = (allowedPackages + pkg).toMutableSet()
+                }
                 startService(Intent(this, OverlayService::class.java).apply {
                     action = "HIDE"
                 })
