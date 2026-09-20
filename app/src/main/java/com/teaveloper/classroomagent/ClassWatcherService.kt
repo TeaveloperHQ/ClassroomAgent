@@ -27,28 +27,20 @@ class ClassWatcherService : AccessibilityService() {
         var instance: ClassWatcherService? = null
         var isClassInSession = false
         /**
-         * 최초 설정 중에만 켜지는 auto-grant 스위치. true 인 동안 이 서비스가
-         * VPN 컨센트/배터리 최적화/오버레이 등 시스템 권한 다이얼로그를 감지해
-         * 자동으로 허용 버튼을 탭한다. MainActivity 의 마법사가 모든 권한을
-         * 확인하면 false 로 되돌린다.
+         * 최초 설정 마법사(WizardActivity)가 켜두는 스위치. true 인 동안 이
+         * 서비스는 VPN 컨센트 다이얼로그(오직 그것 하나) 의 '확인' 버튼을 탭해
+         * 준다. 다른 시스템 화면에는 절대 손대지 않음 — 사용자가 마법사 안내를
+         * 따라 직접 스위치를 눌러 승인한다. 마법사 완료 시 false 로 리셋.
          */
         @Volatile var autoGrantPending = false
 
-        private val PERMISSION_DIALOG_PACKAGES = setOf(
+        // VPN 컨센트 다이얼로그만 대상. 오버레이/배터리 등 일반 설정 화면은
+        // 사용자가 마법사의 안내대로 직접 탭한다.
+        private val VPN_DIALOG_PACKAGES = setOf(
             "com.android.vpndialogs",
             "com.samsung.android.vpndialogs",
-            "com.android.settings",
-            "com.samsung.android.settings",
-            "com.android.systemui",
-            "com.android.packageinstaller",
-            "com.google.android.packageinstaller",
-            "com.samsung.android.packageinstaller",
-            "com.miui.securitycenter",
         )
-        private val AUTO_CONFIRM_LABELS = listOf(
-            "허용", "허용함", "확인", "예", "동의", "계속", "승인",
-            "Allow", "OK", "Yes", "Continue", "Approve", "Accept",
-        )
+        private val VPN_CONFIRM_LABELS = listOf("확인", "OK", "Allow", "허용")
         /**
          * Epoch ms of the last START. During the grace period after START,
          * pending-app banners are suppressed — students shouldn't get scolded
@@ -124,10 +116,10 @@ class ClassWatcherService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         android.util.Log.d("ClassWatcher", "현재 앱: $pkg")
 
-        // 최초 세팅 중 시스템 권한 다이얼로그가 뜨면 자동으로 허용 탭.
-        // isClassInSession 게이트보다 앞에 두어야 세션 시작 전에도 동작.
-        if (autoGrantPending && pkg in PERMISSION_DIALOG_PACKAGES) {
-            tryAutoConfirm()
+        // 최초 세팅 중 VPN 컨센트 다이얼로그만 자동 확인 (초보자에게 가장
+        // 혼란스러운 다이얼로그 하나). 다른 시스템 화면은 손대지 않음.
+        if (autoGrantPending && pkg in VPN_DIALOG_PACKAGES) {
+            tryConfirmVpnDialog()
         }
 
         if (!isClassInSession) return
@@ -239,63 +231,28 @@ class ClassWatcherService : AccessibilityService() {
     }
 
     /**
-     * 시스템 권한 다이얼로그·설정 화면에서 "허용/확인" 계열 버튼(또는 미체크
-     * Switch) 을 찾아 탭한다. 실패하면 조용히 리턴 — 다음 이벤트에서 다시 시도.
+     * VPN 컨센트 다이얼로그의 "확인" 버튼만 탭한다. 이 다이얼로그는 우리 앱이
+     * VpnService.prepare() 를 호출했을 때만 Android 가 띄워준다 — 즉 언제
+     * 어떤 화면이 뜰지를 우리가 명시적으로 트리거한 결과. 사용자의 예상 밖
+     * 화면을 조작하는 게 아니라 자기 앱 요청에 동의하는 셈.
      *
-     * adb logcat -s AutoGrant 로 실제 동작 확인 가능.
+     * adb logcat -s AutoGrant 로 동작 확인 가능.
      */
-    private fun tryAutoConfirm() {
-        val root = rootInActiveWindow ?: run {
-            android.util.Log.d("AutoGrant", "rootInActiveWindow=null, skip")
-            return
-        }
-        for (label in AUTO_CONFIRM_LABELS) {
+    private fun tryConfirmVpnDialog() {
+        val root = rootInActiveWindow ?: return
+        for (label in VPN_CONFIRM_LABELS) {
             val nodes = root.findAccessibilityNodeInfosByText(label) ?: continue
             for (n in nodes) {
-                if (clickIfPossible(n)) {
-                    android.util.Log.d("AutoGrant", "탭 성공: text='$label' cls=${n.className}")
-                    return
+                var current: AccessibilityNodeInfo? = n
+                while (current != null) {
+                    if (current.isClickable && current.isEnabled) {
+                        current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        android.util.Log.d("AutoGrant", "VPN 확인 탭: '$label'")
+                        return
+                    }
+                    current = current.parent
                 }
             }
         }
-        // 오버레이 권한 화면은 다이얼로그가 아니라 스위치 하나짜리 페이지.
-        // 미체크 상태의 Switch 나 SwitchCompat, Samsung 의 SeekBar 커스텀 스위치를 찾아 토글.
-        val switch = findFirstNode(root) { n ->
-            val cn = n.className?.toString() ?: return@findFirstNode false
-            (cn == "android.widget.Switch" || cn.endsWith(".SwitchCompat") ||
-                cn == "androidx.appcompat.widget.SwitchCompat" ||
-                cn.contains("SeslSwitchBar") // Samsung One UI
-            ) && n.isCheckable && !n.isChecked && n.isEnabled
-        }
-        if (switch != null) {
-            val ok = switch.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            android.util.Log.d("AutoGrant", "스위치 탭 결과=$ok cls=${switch.className}")
-            return
-        }
-        android.util.Log.d("AutoGrant", "매칭 노드 없음")
-    }
-
-    private fun clickIfPossible(node: AccessibilityNodeInfo): Boolean {
-        var current: AccessibilityNodeInfo? = node
-        while (current != null) {
-            if (current.isClickable && current.isEnabled) {
-                current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                return true
-            }
-            current = current.parent
-        }
-        return false
-    }
-
-    private fun findFirstNode(
-        root: AccessibilityNodeInfo,
-        predicate: (AccessibilityNodeInfo) -> Boolean
-    ): AccessibilityNodeInfo? {
-        if (predicate(root)) return root
-        for (i in 0 until root.childCount) {
-            val child = root.getChild(i) ?: continue
-            findFirstNode(child, predicate)?.let { return it }
-        }
-        return null
     }
 }
