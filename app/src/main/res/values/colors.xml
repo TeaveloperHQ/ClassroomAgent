@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
+    <!-- Teavel brand palette (mirrors teacher-app-portal src/styles/global.css) -->
+    <color name="teavel_brand_indigo">#FF6366F1</color>
+    <color name="teavel_brand_violet">#FF8B5CF6</color>
+    <color name="teavel_brand_cyan">#FF06B6D4</color>
+    <color name="teavel_accent">#FF4F46E5</color>
+    <color name="teavel_accent_hover">#FF4338CA</color>
+    <color name="teavel_star">#FFF59E0B</color>
+    <color name="teavel_danger">#FFE11D48</color>
+    <color name="teavel_success">#FF10B981</color>
+
+    <!-- Neutrals -->
+    <color name="teavel_ink">#FF0F1226</color>
+    <color name="teavel_ink_muted">#FF64748B</color>
+    <color name="teavel_surface">#FFFFFFFF</color>
+    <color name="teavel_surface_alt">#FFF8FAFC</color>
+    <color name="teavel_border">#FFE2E8F0</color>
+
     <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
 </resources>
