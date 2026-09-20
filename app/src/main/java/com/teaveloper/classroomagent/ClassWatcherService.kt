@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,6 +26,26 @@ class ClassWatcherService : AccessibilityService() {
     companion object {
         var instance: ClassWatcherService? = null
         var isClassInSession = false
+        /**
+         * 최초 설정 중에만 켜지는 auto-grant 스위치. true 인 동안 이 서비스가
+         * VPN 컨센트/배터리 최적화/오버레이 등 시스템 권한 다이얼로그를 감지해
+         * 자동으로 허용 버튼을 탭한다. MainActivity 의 마법사가 모든 권한을
+         * 확인하면 false 로 되돌린다.
+         */
+        @Volatile var autoGrantPending = false
+
+        private val PERMISSION_DIALOG_PACKAGES = setOf(
+            "com.android.vpndialogs",
+            "com.android.settings",
+            "com.android.systemui",
+            "com.android.packageinstaller",
+            "com.google.android.packageinstaller",
+            "com.samsung.android.packageinstaller",
+            "com.miui.securitycenter",
+        )
+        private val AUTO_CONFIRM_LABELS = listOf(
+            "허용", "확인", "OK", "예", "동의", "계속", "Allow", "Yes", "Continue"
+        )
         /**
          * Epoch ms of the last START. During the grace period after START,
          * pending-app banners are suppressed — students shouldn't get scolded
@@ -88,15 +109,23 @@ class ClassWatcherService : AccessibilityService() {
             deniedPackages = (prefs.getStringSet("denied_apps", emptySet()) ?: emptySet()).toMutableSet()
         }
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
         android.util.Log.d("ClassWatcher", "현재 앱: $pkg")
+
+        // 최초 세팅 중 시스템 권한 다이얼로그가 뜨면 자동으로 허용 탭.
+        // isClassInSession 게이트보다 앞에 두어야 세션 시작 전에도 동작.
+        if (autoGrantPending && pkg in PERMISSION_DIALOG_PACKAGES) {
+            tryAutoConfirm()
+        }
 
         if (!isClassInSession) return
 
@@ -204,5 +233,49 @@ class ClassWatcherService : AccessibilityService() {
     override fun onDestroy() {
         instance = null
         super.onDestroy()
+    }
+
+    /**
+     * 시스템 권한 다이얼로그·설정 화면에서 "허용/확인" 계열 버튼(또는 미체크
+     * Switch) 을 찾아 탭한다. 실패하면 조용히 리턴 — 다음 이벤트에서 다시 시도.
+     */
+    private fun tryAutoConfirm() {
+        val root = rootInActiveWindow ?: return
+        for (label in AUTO_CONFIRM_LABELS) {
+            val nodes = root.findAccessibilityNodeInfosByText(label) ?: continue
+            for (n in nodes) {
+                if (clickIfPossible(n)) return
+            }
+        }
+        // 오버레이 권한 화면은 다이얼로그가 아니라 스위치 하나짜리 페이지.
+        // 미체크 상태의 Switch 를 찾아 토글.
+        val switch = findFirstNode(root) { it.className == "android.widget.Switch" && it.isCheckable && !it.isChecked && it.isEnabled }
+        if (switch != null) {
+            switch.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+    }
+
+    private fun clickIfPossible(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        while (current != null) {
+            if (current.isClickable && current.isEnabled) {
+                current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                return true
+            }
+            current = current.parent
+        }
+        return false
+    }
+
+    private fun findFirstNode(
+        root: AccessibilityNodeInfo,
+        predicate: (AccessibilityNodeInfo) -> Boolean
+    ): AccessibilityNodeInfo? {
+        if (predicate(root)) return root
+        for (i in 0 until root.childCount) {
+            val child = root.getChild(i) ?: continue
+            findFirstNode(child, predicate)?.let { return it }
+        }
+        return null
     }
 }
