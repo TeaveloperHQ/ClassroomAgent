@@ -36,7 +36,9 @@ class ClassWatcherService : AccessibilityService() {
 
         private val PERMISSION_DIALOG_PACKAGES = setOf(
             "com.android.vpndialogs",
+            "com.samsung.android.vpndialogs",
             "com.android.settings",
+            "com.samsung.android.settings",
             "com.android.systemui",
             "com.android.packageinstaller",
             "com.google.android.packageinstaller",
@@ -44,7 +46,8 @@ class ClassWatcherService : AccessibilityService() {
             "com.miui.securitycenter",
         )
         private val AUTO_CONFIRM_LABELS = listOf(
-            "허용", "확인", "OK", "예", "동의", "계속", "Allow", "Yes", "Continue"
+            "허용", "허용함", "확인", "예", "동의", "계속", "승인",
+            "Allow", "OK", "Yes", "Continue", "Approve", "Accept",
         )
         /**
          * Epoch ms of the last START. During the grace period after START,
@@ -238,21 +241,38 @@ class ClassWatcherService : AccessibilityService() {
     /**
      * 시스템 권한 다이얼로그·설정 화면에서 "허용/확인" 계열 버튼(또는 미체크
      * Switch) 을 찾아 탭한다. 실패하면 조용히 리턴 — 다음 이벤트에서 다시 시도.
+     *
+     * adb logcat -s AutoGrant 로 실제 동작 확인 가능.
      */
     private fun tryAutoConfirm() {
-        val root = rootInActiveWindow ?: return
+        val root = rootInActiveWindow ?: run {
+            android.util.Log.d("AutoGrant", "rootInActiveWindow=null, skip")
+            return
+        }
         for (label in AUTO_CONFIRM_LABELS) {
             val nodes = root.findAccessibilityNodeInfosByText(label) ?: continue
             for (n in nodes) {
-                if (clickIfPossible(n)) return
+                if (clickIfPossible(n)) {
+                    android.util.Log.d("AutoGrant", "탭 성공: text='$label' cls=${n.className}")
+                    return
+                }
             }
         }
         // 오버레이 권한 화면은 다이얼로그가 아니라 스위치 하나짜리 페이지.
-        // 미체크 상태의 Switch 를 찾아 토글.
-        val switch = findFirstNode(root) { it.className == "android.widget.Switch" && it.isCheckable && !it.isChecked && it.isEnabled }
-        if (switch != null) {
-            switch.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        // 미체크 상태의 Switch 나 SwitchCompat, Samsung 의 SeekBar 커스텀 스위치를 찾아 토글.
+        val switch = findFirstNode(root) { n ->
+            val cn = n.className?.toString() ?: return@findFirstNode false
+            (cn == "android.widget.Switch" || cn.endsWith(".SwitchCompat") ||
+                cn == "androidx.appcompat.widget.SwitchCompat" ||
+                cn.contains("SeslSwitchBar") // Samsung One UI
+            ) && n.isCheckable && !n.isChecked && n.isEnabled
         }
+        if (switch != null) {
+            val ok = switch.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            android.util.Log.d("AutoGrant", "스위치 탭 결과=$ok cls=${switch.className}")
+            return
+        }
+        android.util.Log.d("AutoGrant", "매칭 노드 없음")
     }
 
     private fun clickIfPossible(node: AccessibilityNodeInfo): Boolean {

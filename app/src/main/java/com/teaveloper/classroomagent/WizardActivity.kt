@@ -44,6 +44,12 @@ class WizardActivity : AppCompatActivity() {
     }
 
     private var currentStep = Step.ACCESSIBILITY
+    /**
+     * 진입한 스텝의 시스템 화면을 1회만 자동 열도록 잠금. 폴링이 도는 동안
+     * 같은 스텝에서 여러 번 인텐트를 쏘아 유저가 열어놓은 화면을 덮어쓰지
+     * 않게 한다.
+     */
+    private var launchedStep: Step? = null
 
     private lateinit var illustration: ImageView
     private lateinit var title: TextView
@@ -105,11 +111,21 @@ class WizardActivity : AppCompatActivity() {
         val next = nextIncompleteStep()
         if (next != currentStep) {
             currentStep = next
+            // 새 스텝에 진입하면 아직 인텐트 안 쏜 상태로 리셋
+            launchedStep = null
         }
         render()
         if (currentStep == Step.COMPLETE) {
             ClassWatcherService.autoGrantPending = false
             finish()
+            return
+        }
+        // 접근성 이후 단계는 사용자 대신 자동으로 시스템 화면을 연다. 화면이
+        // 열리면 ClassWatcherService 가 auto-tap 을 시도하고, 실패하면 사용자가
+        // 보이는 그 화면에서 손으로 승인. 어느 쪽이든 폴링이 감지해 다음 스텝.
+        if (currentStep != Step.ACCESSIBILITY && launchedStep != currentStep) {
+            launchedStep = currentStep
+            handler.postDelayed({ openCurrentStepSettings() }, 400L)
         }
     }
 
@@ -125,20 +141,20 @@ class WizardActivity : AppCompatActivity() {
         updateDots()
         when (currentStep) {
             Step.ACCESSIBILITY -> renderAccessibility()
-            Step.OVERLAY -> renderAutoStep(
+            Step.OVERLAY -> renderGuidedStep(
                 indicator = "2 / 4 단계",
                 titleText = "다른 앱 위에 표시 승인",
-                subtitleText = "학교 안내 배너를 보여주기 위한 권한입니다.\n방금 켠 접근성이 자동으로 처리하고 있어요."
+                subtitleText = "곧 뜨는 화면에서 스위치를 오른쪽으로 밀어주세요.\n뒤로가기를 누르면 다음 단계로 넘어갑니다."
             )
-            Step.BATTERY -> renderAutoStep(
+            Step.BATTERY -> renderGuidedStep(
                 indicator = "3 / 4 단계",
                 titleText = "배터리 사용 예외 승인",
-                subtitleText = "수업 중 앱이 꺼지지 않도록 배터리 절약 대상에서 제외합니다.\n자동으로 진행됩니다."
+                subtitleText = "곧 뜨는 알림에서 '허용' 을 눌러주세요.\n수업 중 앱이 꺼지지 않게 하기 위한 설정입니다."
             )
-            Step.VPN -> renderAutoStep(
+            Step.VPN -> renderGuidedStep(
                 indicator = "4 / 4 단계",
                 titleText = "네트워크 필터 승인",
-                subtitleText = "수업 중 금지 사이트를 차단하기 위한 로컬 필터입니다.\n외부로 데이터를 보내지 않아요."
+                subtitleText = "곧 뜨는 알림에서 '확인' 을 눌러주세요.\n외부로 데이터를 보내지 않는 로컬 필터입니다."
             )
             Step.COMPLETE -> Unit
         }
@@ -162,36 +178,59 @@ class WizardActivity : AppCompatActivity() {
     }
 
     /**
-     * 접근성이 켜진 뒤 단계들은 사용자 조작이 원칙적으로 필요 없다.
-     * 서비스가 다이얼로그를 자동 탭할 것이므로 마법사는 "잠시 기다려주세요"
-     * 상태로 표시하고 사용자가 원한다면 "직접 열기" 로 fallback.
+     * 접근성 이후 단계는 refresh() 가 진입 즉시 시스템 화면을 자동으로 열어준다.
+     * 사용자는 열린 화면에서 스위치/버튼만 누르면 됨. 마법사는 그동안 폴링하며
+     * 감지되면 다음 스텝으로 넘어간다. 화면이 닫혔는데 승인 안 됐으면 폴링이
+     * 같은 스텝에 남아 있으므로 "다시 열기" 버튼으로 재시도.
      */
-    private fun renderAutoStep(indicator: String, titleText: String, subtitleText: String) {
+    private fun renderGuidedStep(indicator: String, titleText: String, subtitleText: String) {
         stepIndicator.text = indicator
         title.text = titleText
         subtitle.text = subtitleText
         path.visibility = View.GONE
         waitingSpinner.visibility = View.VISIBLE
+        waitingText.text = "설정 화면을 여는 중..."
         waitingText.visibility = View.VISIBLE
-        primaryButton.text = "직접 열기"
+        primaryButton.text = "설정 화면 다시 열기"
         primaryButton.visibility = View.VISIBLE
-        hint.text = "몇 초 안에 다음 단계로 넘어가지 않으면 위 버튼을 눌러주세요"
+        hint.text = "화면이 뜨지 않으면 위 버튼을 누르세요"
         hint.visibility = View.VISIBLE
-        // 폴백: 자동 탭 실패 시 사용자가 직접 진입할 수 있도록
-        primaryButton.setOnClickListener { openCurrentStepSettings() }
+        primaryButton.setOnClickListener {
+            launchedStep = null
+            openCurrentStepSettings()
+        }
     }
 
     private fun openCurrentStepSettings() {
         when (currentStep) {
-            Step.OVERLAY -> startActivity(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri())
+            Step.OVERLAY -> safeStart(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri()),
+                fallback = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
             )
-            Step.BATTERY -> startActivity(
+            Step.BATTERY -> safeStart(
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    .setData("package:$packageName".toUri())
+                    .setData("package:$packageName".toUri()),
+                // 일부 OEM 은 위 다이얼로그 인텐트를 무시함 — 배터리 최적화 목록
+                // 페이지로 폴백해서 사용자가 앱을 찾아 스위치 오프하도록 유도
+                fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             )
-            Step.VPN -> VpnService.prepare(this)?.let { vpnLauncher.launch(it) }
+            Step.VPN -> VpnService.prepare(this)?.let {
+                try { vpnLauncher.launch(it) } catch (e: Exception) {
+                    android.util.Log.w("Wizard", "VPN 컨센트 실패: ${e.message}")
+                }
+            }
             else -> Unit
+        }
+    }
+
+    private fun safeStart(primary: Intent, fallback: Intent) {
+        try {
+            startActivity(primary)
+        } catch (e: Exception) {
+            android.util.Log.w("Wizard", "primary intent 실패 → fallback: ${e.message}")
+            try { startActivity(fallback) } catch (e2: Exception) {
+                android.util.Log.e("Wizard", "fallback 도 실패: ${e2.message}")
+            }
         }
     }
 
