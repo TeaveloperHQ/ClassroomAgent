@@ -170,6 +170,10 @@ class AgentWebSocketServer(
         }
 
         if (command.startsWith("P2P_USAGE|")) {
+            // Session gate: off-session we neither send nor receive observations.
+            // Otherwise a neighboring class currently in session would pre-seed
+            // our 10-min sliding window before our own class starts.
+            if (!ClassWatcherService.isClassInSession) return
             val parts = command.split("|")
             if (parts.size >= 5) {
                 val pkg = parts[1]
@@ -186,6 +190,7 @@ class AgentWebSocketServer(
         }
 
         if (command.startsWith("P2P_DOMAIN|")) {
+            if (!ClassWatcherService.isClassInSession) return
             val parts = command.split("|")
             if (parts.size >= 5) {
                 val domain = parts[1]
